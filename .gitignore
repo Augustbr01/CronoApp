@@ -12,6 +12,17 @@ dist
 dist-ssr
 *.local
 
+# Test & coverage artifacts
+coverage
+playwright-report
+test-results
+.playwright
+
+# Environment — a YOUTUBE_API_KEY jamais deve ser commitada (Etapa 0 / RNF-06.4)
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -24,3 +35,5 @@ dist-ssr
 *.sw?
 
 docs/
+CLAUDE.md
+adr/
