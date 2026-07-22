@@ -1761,3 +1761,37 @@ input:focus-visible,
 .shortcuts span:last-of-type {
   margin-left: auto;
 }
+
+/* ---------- Cronômetro na reta final ---------- */
+/* Pisca em vermelho nos últimos segundos: no louvor é a música acabando, no
+   fundo é o "Mix agora" prestes a acontecer sozinho. A pergunta do operador é a
+   mesma nos dois casos — "dá tempo de fazer alguma coisa?" —, então o aviso é o
+   mesmo.
+
+   1 Hz de propósito: rápido o bastante para puxar o olho de quem está olhando
+   para a igreja, e bem abaixo dos três flashes por segundo que a WCAG trata
+   como risco. */
+@keyframes crCountdownAlerta {
+  0%,
+  45% {
+    color: var(--live);
+  }
+  55%,
+  100% {
+    color: var(--text);
+  }
+}
+.countdown.acabando b {
+  animation: crCountdownAlerta 1s steps(1, end) infinite;
+}
+.countdown.acabando small {
+  color: var(--live);
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Quem pediu menos movimento recebe o mesmo aviso parado: o vermelho sozinho
+     já diz "está acabando", sem nada piscando na periferia da visão. */
+  .countdown.acabando b {
+    animation: none;
+    color: var(--live);
+  }
+}

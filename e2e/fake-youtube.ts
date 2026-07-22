@@ -34,6 +34,10 @@ declare global {
         loads: string[]
         volume: number
         estado: number
+        /** O relógio do vídeo, em segundos. O teste empurra para andar. */
+        currentTime: number
+        /** A duração do vídeo. Zero significa "ainda não sei", como no YouTube. */
+        duration: number
         emitir(estado: number): void
       }[]
     }
@@ -98,6 +102,8 @@ export async function instalarYouTubeFalso(page: Page): Promise<void> {
           loads: [],
           volume: 100,
           estado: ESTADOS.UNSTARTED,
+          currentTime: 0,
+          duration: 0,
           emitir: (estado: number) => {
             this.entrada.estado = estado
             this.eventos.onStateChange?.({ target: this, data: estado })
@@ -115,6 +121,8 @@ export async function instalarYouTubeFalso(page: Page): Promise<void> {
 
       loadVideoById(videoId: string) {
         this.entrada.loads.push(videoId)
+        // Carregar recomeça o vídeo; a duração é do teste e sobrevive.
+        this.entrada.currentTime = 0
         this.entrada.emitir(ESTADOS.PLAYING)
       }
       cueVideoById(videoId: string) {
@@ -138,10 +146,10 @@ export async function instalarYouTubeFalso(page: Page): Promise<void> {
         return this.entrada.estado
       }
       getCurrentTime() {
-        return 0
+        return this.entrada.currentTime
       }
       getDuration() {
-        return 0
+        return this.entrada.duration
       }
       destroy() {
         const i = registro.players.indexOf(this.entrada)

@@ -8,6 +8,7 @@ import {
   Sun,
 } from 'lucide-react'
 import { useCrono, useEngine, useEngineValue } from './context'
+import { estaAcabando } from './countdown'
 import { Clock } from '../../shared/Clock'
 import { formatDuration, formatTime } from '../../shared/format'
 
@@ -72,14 +73,28 @@ export function Topbar({ onOpenSettings }: TopbarProps) {
           ? 'Aperte play ou use a tecla B'
           : 'Adicione o primeiro fundo musical na aba Fundos'
 
+  /**
+   * Quantos segundos faltam para o canal no ar acabar — ou `null` quando não
+   * há contagem nenhuma correndo (relógio de parede, duração desconhecida).
+   */
+  const restanteSec =
+    isMain && current?.durationSec
+      ? Math.max(0, current.durationSec - elapsed)
+      : isBackground && background?.durationSec
+        ? Math.max(0, background.durationSec - backgroundElapsed)
+        : null
+
   const restante =
-    isMain && current?.durationSec ? (
-      formatTime(current.durationSec - elapsed)
-    ) : isBackground && background?.durationSec ? (
-      formatTime(Math.max(0, background.durationSec - backgroundElapsed))
+    restanteSec !== null ? (
+      formatTime(restanteSec)
     ) : (
       <Clock live={mode === 'silence'} />
     )
+
+  // No fundo o fim não é fim: é o "Mix agora" acontecendo sozinho (RF-03.5).
+  // O aviso é o mesmo porque a pergunta do operador é a mesma — "tenho tempo
+  // de fazer alguma coisa antes?".
+  const acabando = estaAcabando(restanteSec)
 
   const podeTocar = isMain || isPaused || backgrounds.length > 0
 
@@ -118,10 +133,14 @@ export function Topbar({ onOpenSettings }: TopbarProps) {
         <span>{subtitulo}</span>
       </div>
 
-      <div className="countdown">
+      <div className={`countdown ${acabando ? 'acabando' : ''}`}>
         <small>
           {isMain ? 'RESTA' : isBackground ? 'MIX AUTO EM' : 'AGORA'}
         </small>
+        {/* `aria-live` fica de fora de propósito: o número muda a cada segundo,
+            e anunciá-lo faria o leitor de tela falar por cima de tudo o resto
+            durante o culto inteiro. Quem não vê a cor tem o tempo no subtítulo,
+            que já é lido sob demanda. */}
         <b>{restante}</b>
       </div>
 

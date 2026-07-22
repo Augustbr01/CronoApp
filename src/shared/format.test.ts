@@ -12,7 +12,28 @@ describe('formatTime', () => {
     expect(formatTime(0)).toBe('0:00')
     expect(formatTime(9)).toBe('0:09')
     expect(formatTime(254)).toBe('4:14')
-    expect(formatTime(3600)).toBe('60:00')
+  })
+
+  it('mostra a hora quando existe — coletânea de fundo (RF-03.1)', () => {
+    // Três horas eram `180:00`, um número que o operador tinha que converter
+    // de cabeça para saber se dava para o culto inteiro.
+    expect(formatTime(10_800)).toBe('3:00:00')
+    expect(formatTime(3600)).toBe('1:00:00')
+    expect(formatTime(3661)).toBe('1:01:01')
+    expect(formatTime(7_845)).toBe('2:10:45')
+  })
+
+  it('mas não inventa hora onde não tem', () => {
+    // O caso comum é uma música de quatro minutos no cronômetro grande da
+    // topbar: `0:03:47` ali seriam dois caracteres a mais para ler de relance.
+    expect(formatTime(3599)).toBe('59:59')
+    expect(formatTime(60)).toBe('1:00')
+  })
+
+  it('o minuto ganha zero à esquerda só depois da hora', () => {
+    // `1:5:03` seria ilegível; `1:05:03` é o formato que todo player usa.
+    expect(formatTime(3903)).toBe('1:05:03')
+    expect(formatTime(303)).toBe('5:03')
   })
 
   it('não deixa NaN nem número negativo chegarem à tela', () => {
@@ -28,6 +49,10 @@ describe('formatDuration', () => {
     expect(formatDuration(undefined)).toBe('--:--')
     expect(formatDuration(0)).toBe('--:--')
     expect(formatDuration(254)).toBe('4:14')
+  })
+
+  it('coletânea longa aparece em horas', () => {
+    expect(formatDuration(10_800)).toBe('3:00:00')
   })
 })
 
