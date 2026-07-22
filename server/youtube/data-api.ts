@@ -1,4 +1,4 @@
-import { durationToSeconds } from './duration'
+import { durationToSeconds } from './duration.js'
 
 /**
  * O cliente da YouTube Data API v3 — o único lugar do projeto que fala com o

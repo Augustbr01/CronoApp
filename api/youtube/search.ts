@@ -1,4 +1,4 @@
-import { createSearchEndpoint } from '../../server/youtube/search-endpoint'
+import { createSearchEndpoint } from '../../server/youtube/search-endpoint.js'
 
 /**
  * `GET /api/youtube/search` — o ponto de entrada da Vercel.

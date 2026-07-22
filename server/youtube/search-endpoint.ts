@@ -1,18 +1,18 @@
-import { createCache } from '../cache'
-import type { Cache } from '../cache'
-import { clientIp, readUrl, sendJson } from '../http'
-import type { HttpRequest, HttpResponse } from '../http'
-import { QUOTA_COST, createQuotaLedger } from '../quota'
-import type { QuotaLedger } from '../quota'
-import { createRateLimiter } from '../rate-limit'
-import type { RateLimiter } from '../rate-limit'
+import { createCache } from '../cache.js'
+import type { Cache } from '../cache.js'
+import { clientIp, readUrl, sendJson } from '../http.js'
+import type { HttpRequest, HttpResponse } from '../http.js'
+import { QUOTA_COST, createQuotaLedger } from '../quota.js'
+import type { QuotaLedger } from '../quota.js'
+import { createRateLimiter } from '../rate-limit.js'
+import type { RateLimiter } from '../rate-limit.js'
 import {
   YouTubeApiError,
   fetchVideoDetails,
   searchVideos,
   withDurations,
-} from './data-api'
-import type { VideoDuration, VideoResult } from './data-api'
+} from './data-api.js'
+import type { VideoDuration, VideoResult } from './data-api.js'
 
 /**
  * `GET /api/youtube/search?q=&duration=` — o endpoint que o RF-10 descreve.

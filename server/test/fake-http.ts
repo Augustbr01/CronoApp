@@ -1,4 +1,4 @@
-import type { HttpRequest, HttpResponse } from '../http'
+import type { HttpRequest, HttpResponse } from '../http.js'
 
 /**
  * Requisição e resposta de mentira, para testar endpoint sem subir servidor.

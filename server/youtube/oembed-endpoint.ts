@@ -1,18 +1,18 @@
-import { createCache } from '../cache'
-import type { Cache } from '../cache'
-import { clientIp, readUrl, sendJson } from '../http'
-import type { HttpRequest, HttpResponse } from '../http'
-import { QUOTA_COST, createQuotaLedger } from '../quota'
-import type { QuotaLedger } from '../quota'
-import { createRateLimiter } from '../rate-limit'
-import type { RateLimiter } from '../rate-limit'
-import { fetchVideoDetails } from './data-api'
+import { createCache } from '../cache.js'
+import type { Cache } from '../cache.js'
+import { clientIp, readUrl, sendJson } from '../http.js'
+import type { HttpRequest, HttpResponse } from '../http.js'
+import { QUOTA_COST, createQuotaLedger } from '../quota.js'
+import type { QuotaLedger } from '../quota.js'
+import { createRateLimiter } from '../rate-limit.js'
+import type { RateLimiter } from '../rate-limit.js'
+import { fetchVideoDetails } from './data-api.js'
 import {
   EmbedBlockedError,
   OembedError,
   VideoNotFoundError,
   fetchOembed,
-} from './oembed'
+} from './oembed.js'
 
 /**
  * `GET /api/youtube/oembed?id=` — o título e a duração de um link colado
