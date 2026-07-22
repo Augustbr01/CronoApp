@@ -148,6 +148,11 @@ export function Dashboard() {
           <kbd>↓</kbd> volume do fundo
         </span>
         <span>
+          <kbd>Shift</kbd>
+          <kbd>↑</kbd>
+          <kbd>↓</kbd> volume do master
+        </span>
+        <span>
           <kbd>1</kbd>
           <kbd>2</kbd>
           <kbd>3</kbd> abas

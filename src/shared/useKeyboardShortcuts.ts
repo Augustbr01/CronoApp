@@ -18,7 +18,12 @@ import type { AppTab } from './tabs'
  * | `N` | toca a próxima da fila |
  * | `M` | mixa para o próximo fundo |
  * | `↑` `↓` | volume do fundo, de 5 em 5 |
+ * | `Shift` + `↑` `↓` | volume do master |
  * | `1` `2` `3` | troca de aba |
+ *
+ * O fundo fica nas setas secas e o master no `Shift` porque é o fundo que o
+ * operador mexe o tempo todo — ele acompanha a fala, sobe na oração, desce
+ * quando alguém pega o microfone. O master é ajuste de começo de culto.
  *
  * **Nada dispara com o foco num campo de texto ou com o modal aberto**
  * (RF-07.2): quem está digitando o nome de alguém não pode parar o louvor ao
@@ -37,6 +42,20 @@ function digitando(target: EventTarget | null): boolean {
   if (target.isContentEditable) return true
   const tag = target.tagName
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+}
+
+/**
+ * O foco está num fader, que trata as setas por conta própria?
+ *
+ * Sem esta pergunta as duas coisas acontecem ao mesmo tempo: o `onKeyDown` do
+ * fader soma 5 e o atalho global soma outros 5. O operador aperta uma vez e o
+ * volume pula 10 — e ele não tem como saber por quê, porque a tecla é a mesma
+ * que funciona certo quando o foco está em qualquer outro lugar.
+ */
+function emUmFader(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement && target.closest('[role="slider"]') !== null
+  )
 }
 
 export function useKeyboardShortcuts({ setTab, paused }: Options): void {
@@ -59,12 +78,16 @@ export function useKeyboardShortcuts({ setTab, paused }: Options): void {
           engine.togglePlayPause()
           return
         case 'ArrowUp':
+          if (emUmFader(event.target)) return
           event.preventDefault()
-          engine.nudgeBackgroundFader(5)
+          if (event.shiftKey) engine.nudgeMainFader(5)
+          else engine.nudgeBackgroundFader(5)
           return
         case 'ArrowDown':
+          if (emUmFader(event.target)) return
           event.preventDefault()
-          engine.nudgeBackgroundFader(-5)
+          if (event.shiftKey) engine.nudgeMainFader(-5)
+          else engine.nudgeBackgroundFader(-5)
           return
         case '1':
           setTab('queue')

@@ -51,6 +51,7 @@ npm run dev
 | `npm run test:watch`    | Vitest em modo watch                          |
 | `npm run test:coverage` | Vitest com cobertura                          |
 | `npm run test:e2e`      | Testes end-to-end (Playwright)                |
+| `npm run check:bundle`  | Orçamento do bundle (RNF-04.1), após o build  |
 
 ## Arquitetura
 
@@ -80,4 +81,8 @@ api/           os pontos de entrada da Vercel, finos, que só apontam pra server
 - [x] **Etapa 5 — Backend de busca**: endpoint de busca com cache, limite por
       IP e contador de cota; oEmbed preenchendo título, duração e aviso de embed
       bloqueado ao colar link.
-- [ ] Etapa 6 — Endurecimento e entrega
+- [x] **Etapa 6 — Endurecimento e entrega**: e2e do fluxo crítico no app
+      construído, auditoria de acessibilidade nos dois temas, orçamento de
+      bundle verificado no CI, manifesto PWA e ícones.
+- [ ] Ensaio real: um culto inteiro em paralelo com o método atual, antes de
+      aposentar o protótipo.

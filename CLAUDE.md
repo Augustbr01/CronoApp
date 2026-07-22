@@ -36,6 +36,8 @@ src/
 
 server/        backend de busca — cache, limite por IP, cota, Data API, oEmbed
 api/           entrypoints da Vercel: cinco linhas cada, apontando pra server/
+e2e/           Playwright sobre o app construído — fluxo crítico, a11y, layout
+scripts/       verificações de entrega (orçamento de bundle)
 ```
 
 Fluxo de dependência: `features/*` e a UI dependem de `audio/`, `youtube/` e
@@ -68,12 +70,15 @@ As quatro decisões já fechadas estão registradas em [`adr/`](adr/):
 2. [YouTube IFrame API no lugar do react-player](adr/0002-youtube-iframe-api.md)
 3. [Persistência local em IndexedDB](adr/0003-persistencia-indexeddb.md)
 4. [Alvo desktop-first e implantação na Vercel](adr/0004-alvo-e-implantacao.md)
+5. [PWA instalável, mas sem service worker](adr/0005-sem-service-worker.md)
 
 ## Limitações conhecidas
 
 - **Depende de internet** — é streaming do YouTube. O plano B do operador é o
   hotspot do celular; a perda de conexão deve ser detectada e comunicada
-  (RNF-03.4).
+  (RNF-03.4). O app instala como PWA mas **não abre offline**, e isso é decisão,
+  não pendência: uma casca que abre sem poder tocar mentiria no pior momento
+  (ADR [0005](adr/0005-sem-service-worker.md)).
 - **Sem contas e sem nuvem.** Os dados vivem no dispositivo (IndexedDB).
   Backup/portabilidade é feito por export/import JSON (RF-09.4).
 - **O iframe do YouTube não permite `setSinkId`** — não há seleção real de saída
@@ -83,7 +88,15 @@ As quatro decisões já fechadas estão registradas em [`adr/`](adr/):
 
 ## Etapas
 
-Reescrita em 6 etapas (plano completo em `docs/`, mantido fora do git). A Etapa 1
-(esta fundação) entregou tooling, CI, estrutura por domínio e documentação. As
-pastas de domínio trazem um `README.md` apontando em qual etapa serão
-preenchidas.
+Reescrita em 6 etapas (plano completo em `docs/`, mantido fora do git), todas
+entregues: fundação, motor de áudio, domínio e persistência, interface, backend
+de busca e endurecimento. As pastas de domínio trazem um `README.md` dizendo o
+que mora ali.
+
+Falta o **ensaio real**: rodar um culto inteiro em paralelo com o método atual
+antes de aposentar o protótipo. Nenhuma suíte substitui isso.
+
+O que o CI verifica a cada push, além de typecheck, lint e formato: 397 testes
+unitários e de componente, 13 end-to-end sobre o app **construído** (fluxo
+crítico, acessibilidade nos dois temas e integridade do layout) e o orçamento de
+bundle do RNF-04.1.

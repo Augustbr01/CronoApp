@@ -11,5 +11,6 @@ ADR que supersede o anterior.
 | [0002](0002-youtube-iframe-api.md)     | YouTube IFrame API no lugar do `react-player` | Aceito |
 | [0003](0003-persistencia-indexeddb.md) | Persistência local em IndexedDB               | Aceito |
 | [0004](0004-alvo-e-implantacao.md)     | Alvo desktop-first e implantação na Vercel    | Aceito |
+| [0005](0005-sem-service-worker.md)     | PWA instalável, mas sem service worker        | Aceito |
 
 Modelo para novos ADRs: [`_template.md`](_template.md).

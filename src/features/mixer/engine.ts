@@ -148,6 +148,7 @@ export interface AudioEngine {
   setMainFader(value: number): void
   setBackgroundFader(value: number): void
   nudgeBackgroundFader(delta: number): void
+  nudgeMainFader(delta: number): void
 
   dismissError(): void
   destroy(): void
@@ -800,6 +801,11 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
     nudgeBackgroundFader(delta) {
       state().nudgeBackgroundFader(delta)
       mixer.setFader('background', state().backgroundFader)
+    },
+
+    nudgeMainFader(delta) {
+      state().nudgeMainFader(delta)
+      mixer.setFader('main', state().mainFader)
     },
 
     dismissError() {

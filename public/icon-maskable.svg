@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="CronoApp">
+  <!--
+    A versão "maskable": o sistema recorta este ícone na forma que quiser
+    (círculo, quadrado arredondado, gota). Por isso o fundo sangra até a borda e
+    o desenho vive dentro da zona segura — o círculo central de 80% do lado.
+
+    É o mesmo desenho do icon.svg, encolhido para caber nessa zona. Sem esta
+    versão, o Android recortaria os cursores das pontas.
+  -->
+  <rect width="512" height="512" fill="#0f1013" />
+
+  <g transform="translate(256 256) scale(0.62) translate(-256 -256)">
+    <g stroke="#2a2e36" stroke-width="26" stroke-linecap="round">
+      <line x1="146" y1="120" x2="146" y2="392" />
+      <line x1="256" y1="120" x2="256" y2="392" />
+      <line x1="366" y1="120" x2="366" y2="392" />
+    </g>
+
+    <g stroke="#e8b64c" stroke-width="26" stroke-linecap="round">
+      <line x1="146" y1="286" x2="146" y2="392" />
+      <line x1="256" y1="176" x2="256" y2="392" />
+      <line x1="366" y1="330" x2="366" y2="392" />
+    </g>
+
+    <g fill="#f6f7f9">
+      <rect x="112" y="266" width="68" height="40" rx="12" />
+      <rect x="222" y="156" width="68" height="40" rx="12" />
+      <rect x="332" y="310" width="68" height="40" rx="12" />
+    </g>
+  </g>
+</svg>

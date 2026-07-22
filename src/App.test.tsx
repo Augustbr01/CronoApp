@@ -506,3 +506,68 @@ describe('colar link preenche o título pelo oEmbed (RF-01.2)', () => {
     expect(painel.players.main().loads).toEqual(['dQw4w9WgXcQ'])
   })
 })
+
+describe('os faders (RF-05.1, RF-05.6)', () => {
+  it('Shift + setas mexem o master, setas secas mexem o fundo', async () => {
+    const u = user()
+
+    await u.keyboard('{Shift>}{ArrowDown}{ArrowDown}{/Shift}')
+
+    expect(
+      screen.getByRole('slider', { name: 'Volume MASTER' }),
+    ).toHaveAttribute('aria-valuenow', '70')
+    // E o fundo não se mexeu junto.
+    expect(
+      screen.getByRole('slider', { name: 'Volume FUNDO' }),
+    ).toHaveAttribute('aria-valuenow', '40')
+
+    await u.keyboard('{ArrowUp}')
+    expect(
+      screen.getByRole('slider', { name: 'Volume MASTER' }),
+    ).toHaveAttribute('aria-valuenow', '70')
+    expect(
+      screen.getByRole('slider', { name: 'Volume FUNDO' }),
+    ).toHaveAttribute('aria-valuenow', '45')
+  })
+
+  it('o master também vai ao som, não só ao número', async () => {
+    await enfileirar('Ana', 'https://youtu.be/dQw4w9WgXcQ')
+    const u = user()
+    await u.click(screen.getByRole('button', { name: 'Tocar Ana' }))
+    await painel.advance(FADE_MS)
+    expect(painel.players.main().volume).toBeCloseTo(0.8, 2)
+
+    await u.keyboard('{Shift>}{ArrowDown}{ArrowDown}{/Shift}')
+    await painel.advance(FADE_MS)
+
+    expect(painel.players.main().volume).toBeCloseTo(0.7, 2)
+  })
+})
+
+describe('foco no fader não duplica o passo da seta', () => {
+  it('com o fader focado, a seta anda 5 — não 10', async () => {
+    const u = user()
+    const fundo = screen.getByRole('slider', { name: 'Volume FUNDO' })
+    fundo.focus()
+
+    await u.keyboard('{ArrowUp}')
+
+    // O onKeyDown do fader e o atalho global respondem à mesma tecla; sem a
+    // guarda, os dois somavam e o volume pulava o dobro.
+    expect(fundo).toHaveAttribute('aria-valuenow', '45')
+  })
+
+  it('e o master focado também anda 5', async () => {
+    const u = user()
+    const master = screen.getByRole('slider', { name: 'Volume MASTER' })
+    master.focus()
+
+    await u.keyboard('{ArrowDown}')
+
+    expect(master).toHaveAttribute('aria-valuenow', '75')
+    // Sem mexer no fundo de tabela.
+    expect(
+      screen.getByRole('slider', { name: 'Volume FUNDO' }),
+    ).toHaveAttribute('aria-valuenow', '40')
+  })
+})

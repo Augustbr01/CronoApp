@@ -56,6 +56,8 @@ export interface PlaybackSlice {
   setBackgroundFader(value: number): void
   /** Soma um passo ao fader do fundo — as setas do teclado (RF-07.1). */
   nudgeBackgroundFader(delta: number): void
+  /** O mesmo para o master, com `Shift` junto das setas. */
+  nudgeMainFader(delta: number): void
   setMainMuted(muted: boolean): void
   setBackgroundMuted(muted: boolean): void
 }
@@ -159,6 +161,12 @@ export const createPlaybackSlice: StateCreator<
     nudgeBackgroundFader(delta) {
       set((state) => ({
         backgroundFader: clampFader(state.backgroundFader + delta),
+      }))
+    },
+
+    nudgeMainFader(delta) {
+      set((state) => ({
+        mainFader: clampFader(state.mainFader + delta),
       }))
     },
 

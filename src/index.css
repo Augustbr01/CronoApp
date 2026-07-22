@@ -35,7 +35,13 @@ button:disabled {
   --line: #262a31;
   --text: #f2f4f6;
   --muted: #98a0aa;
-  --faint: #646b75;
+  /* O texto mais apagado da tela — rótulos, dicas, placeholders.
+     Era #646b75, que dava 3,0:1 sobre os painéis e reprovava no WCAG AA
+     (RNF-05.4). Não é conformidade por conformidade: culto é ambiente escuro e
+     o operador lê de relance, entre uma música e outra. Este valor dá de 4,9 a
+     5,8:1 sobre as três superfícies escuras — conferido pela auditoria do axe
+     em `e2e/acessibilidade.spec.ts`. */
+  --faint: #868e9b;
   --accent: #e8b64c;
   --accent-ink: #07130c;
   --accent-soft: color-mix(in srgb, var(--accent) 13%, transparent);
@@ -58,7 +64,9 @@ button:disabled {
   --line: #e1e4e9;
   --text: #17191d;
   --muted: #5b636d;
-  --faint: #9aa1ab;
+  /* Mesma correção do tema escuro: #9aa1ab dava 2,3:1 sobre branco, longe do
+     mínimo. Este dá de 4,6 a 5,3:1. */
+  --faint: #656c7a;
   --accent-ink: #17191d;
   --live: #df3c31;
   --live-soft: rgba(223, 60, 49, 0.09);
@@ -1121,6 +1129,14 @@ input:focus-visible,
   align-self: stretch;
   justify-content: center;
   gap: 7px;
+  /* A coluna inteira arrasta, não só o trilho de 28 px — ver o comentário no
+     Fader.tsx. `touch-action` e `user-select` desligados porque as duas coisas
+     que o navegador faria por conta própria com esse gesto (rolar a página,
+     selecionar texto) abortam o arraste no meio. */
+  cursor: ns-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .meter {
   display: flex;
@@ -1150,8 +1166,18 @@ input:focus-visible,
   position: relative;
   width: 28px;
   flex: none;
-  cursor: ns-resize;
-  touch-action: none;
+}
+.fader-track:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+/* Foco que veio de clique não desenha anel: durante o arraste ele contornaria
+   o trilho inteiro e atrapalharia justamente a leitura que o operador está
+   fazendo. Quem chega pelo teclado continua vendo — ver o comentário em
+   `focoDePonteiro`, no Fader.tsx. */
+.fader-track.foco-de-ponteiro:focus-visible {
+  outline: none;
 }
 .fader-rail {
   position: absolute;
@@ -1181,6 +1207,19 @@ input:focus-visible,
   border-radius: 5px;
   background: var(--text);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  transition:
+    height 0.12s ease,
+    box-shadow 0.12s ease;
+}
+/* Resposta imediata a "pegou?".
+   O relato era o operador não saber se o gesto tinha valido e ficar soltando e
+   clicando de novo; com o cursor engordando na hora, a dúvida não chega a
+   nascer. */
+.fader-body.dragging .fader-handle {
+  height: 17px;
+  box-shadow:
+    0 2px 10px rgba(0, 0, 0, 0.5),
+    0 0 0 3px var(--accent-soft);
 }
 
 /* ---------- Aviso de fade ---------- */
@@ -1448,8 +1487,13 @@ input:focus-visible,
 
 /* ---------- Responsivo ---------- */
 @media (max-width: 1200px) {
+  /* A coluna do mixer era 132 px e o conteúdo dela pedia ~142: os dois faders,
+     o divisor e os paddings não cabiam, e sobrava 1,7 px transbordando para
+     fora da tela — rolagem horizontal num painel que o operador usa sem tirar a
+     mão do fader (RNF-06.2). Medido em 1024 px pela auditoria de layout em
+     `e2e/layout.spec.ts`; os 14 px vêm da coluna da fila, que tem de sobra. */
   .workbench {
-    grid-template-columns: minmax(0, 1.3fr) minmax(290px, 0.85fr) 132px;
+    grid-template-columns: minmax(0, 1.3fr) minmax(290px, 0.85fr) 146px;
   }
   .mixer-pane {
     padding: 18px 8px;
