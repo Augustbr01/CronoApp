@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      # O orçamento do RNF-04.1. Roda depois do build porque mede o `dist/`:
+      # reprova acima de 300 KB comprimidos e barra biblioteca de streaming
+      # (HLS/DASH) que volte a entrar pelo bundle sem ninguém notar.
+      - name: Bundle budget
+        run: npm run check:bundle
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Só o Chromium: o alvo declarado é Chrome desktop (ADR 0004), e baixar
+      # três navegadores para testar um seria pagar minutos de CI por nada.
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Fluxo crítico (RNF-02.4), auditoria de acessibilidade (RNF-05) e
+      # integridade do layout (RNF-06.2), todos contra o app construído. O
+      # próprio Playwright faz o `build` e sobe o `preview` (ver
+      # playwright.config.ts).
+      - name: End-to-end
+        run: npm run test:e2e
+
+      - name: Upload report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

@@ -1,10 +1,34 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>cronoapp</title>
+
+    <title>CronoApp — painel de som</title>
+    <meta
+      name="description"
+      content="Painel de operação de som para culto ao vivo: fila de participantes, trilha de fundo e fades automáticos."
+    />
+
+    <!--
+      `lang="pt-BR"` não é enfeite: é o que faz o leitor de tela pronunciar
+      "louvor" e "fundo" em português, em vez de soletrar em inglês (RNF-05).
+    -->
+
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- A moldura da janela instalada acompanha o painel escuro (ADR 0001). -->
+    <meta name="theme-color" content="#0f1013" />
+
+    <!--
+      Sem service worker, de propósito. O CronoApp é um cliente de streaming do
+      YouTube: uma casca que abre offline e não toca nada seria pior do que não
+      abrir — ela mentiria para o operador no pior momento possível. A limitação
+      "depende de internet" está documentada, e o painel avisa quando a rede cai
+      (RNF-03.4). Ver ADR 0005.
+    -->
   </head>
   <body>
     <div id="root"></div>

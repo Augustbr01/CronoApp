@@ -1,0 +1,28 @@
+{
+  "name": "CronoApp — painel de som",
+  "short_name": "CronoApp",
+  "description": "Painel de operação de som para culto ao vivo: fila de participantes, trilha de fundo e fades automáticos.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0f1013",
+  "theme_color": "#0f1013",
+  "categories": ["music", "productivity"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

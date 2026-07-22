@@ -3,10 +3,34 @@ import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
+import eslintConfigPrettier from 'eslint-config-prettier'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
+const vitestGlobals = {
+  suite: 'readonly',
+  test: 'readonly',
+  describe: 'readonly',
+  it: 'readonly',
+  expect: 'readonly',
+  assert: 'readonly',
+  vi: 'readonly',
+  beforeAll: 'readonly',
+  afterAll: 'readonly',
+  beforeEach: 'readonly',
+  afterEach: 'readonly',
+  onTestFailed: 'readonly',
+  onTestFinished: 'readonly',
+}
+
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores([
+    'dist',
+    'coverage',
+    'playwright-report',
+    'test-results',
+    // Cópia deixada pelo Syncthing ao resolver um conflito — ver .gitignore.
+    '**/*.sync-conflict-*',
+  ]),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -19,4 +43,26 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  // Test files: expose Vitest globals (globals: true in vitest config).
+  {
+    files: ['**/*.test.{ts,tsx}', 'src/test/**/*.{ts,tsx}'],
+    languageOptions: {
+      globals: { ...globals.browser, ...vitestGlobals },
+    },
+  },
+  // Node-side tooling and end-to-end specs.
+  {
+    files: ['*.config.{ts,js}', 'e2e/**/*.ts', 'api/**/*.ts', 'server/**/*.ts'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+  // Server-side tests get the Vitest globals on top of the Node ones.
+  {
+    files: ['server/**/*.test.ts'],
+    languageOptions: {
+      globals: { ...globals.node, ...vitestGlobals },
+    },
+  },
+  eslintConfigPrettier,
 ])

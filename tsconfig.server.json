@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.server.tsbuildinfo",
+    "target": "es2023",
+    /* Sem `DOM`: é o compilador impedindo que código de servidor use `window`,
+       `document` ou `localStorage` por engano. `fetch`, `URL` e `AbortSignal`
+       chegam pelos tipos do Node. */
+    "lib": ["ES2023"],
+    "module": "esnext",
+    "types": ["node", "vitest/globals"],
+    "skipLibCheck": true,
+
+    /* Bundler mode — igual ao tsconfig.app.json. A Vercel empacota `api/` com
+       o próprio esbuild, que resolve import sem extensão. */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["api", "server"]
+}

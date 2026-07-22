@@ -12,6 +12,22 @@ dist
 dist-ssr
 *.local
 
+# Test & coverage artifacts
+coverage
+playwright-report
+test-results
+.playwright
+
+# Environment — a YOUTUBE_API_KEY jamais deve ser commitada (Etapa 0 / RNF-06.4)
+.env
+.env.*
+!.env.example
+
+# Conflitos do Syncthing — a pasta é sincronizada entre máquinas, e um
+# `engine.sync-conflict-….ts` dentro de src/ é compilado, lintado e testado
+# junto com o original.
+*.sync-conflict-*
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -22,3 +38,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# O plano de trabalho e as revisões são nossos, não do repositório.
+# O guia de arquitetura (CLAUDE.md) e as ADRs ficam versionados: são eles que
+# explicam a estrutura a quem clonar.
+docs/
