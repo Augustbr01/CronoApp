@@ -7,11 +7,12 @@ import { FadeToasts } from './features/mixer/FadeToasts'
 import { MixerPane } from './features/mixer/MixerPane'
 import { PreviewDeck } from './features/mixer/PreviewDeck'
 import { Topbar } from './features/mixer/Topbar'
-import { useCrono, useEngine } from './features/mixer/context'
+import { useCrono, useEngine, useHydrated } from './features/mixer/context'
 import { HistoryPanel } from './features/queue/HistoryPanel'
 import { QueueTab } from './features/queue/QueueTab'
 import { SearchTab } from './features/search/SearchTab'
 import { SettingsModal } from './shared/SettingsModal'
+import { WelcomeSetup } from './shared/WelcomeSetup'
 import { useOnlineStatus } from './shared/hooks'
 import { useKeyboardShortcuts } from './shared/useKeyboardShortcuts'
 import type { AppTab } from './shared/tabs'
@@ -36,6 +37,12 @@ export function Dashboard() {
   const accent = useCrono((state) => state.preferences.accent)
   const queueLength = useCrono((state) => state.queue.length)
 
+  // A tela de boas-vindas só depois do IndexedDB responder: antes disso o
+  // estado é o padrão de fábrica, e ela apareceria para quem já configurou.
+  const hydrated = useHydrated()
+  const setupDone = useCrono((state) => state.preferences.setupDone)
+  const mostrarBoasVindas = hydrated && !setupDone
+
   const online = useOnlineStatus()
 
   // Estável, senão o React desmontaria e remontaria o player do fundo a cada
@@ -53,7 +60,8 @@ export function Dashboard() {
     if (online) engine.retryPlayers()
   }, [online, engine])
 
-  useKeyboardShortcuts({ setTab, paused: settingsOpen })
+  // Com qualquer diálogo por cima, o teclado é dele (RF-07.2).
+  useKeyboardShortcuts({ setTab, paused: settingsOpen || mostrarBoasVindas })
 
   return (
     <main
@@ -163,6 +171,8 @@ export function Dashboard() {
       <FadeToasts />
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+
+      {mostrarBoasVindas && <WelcomeSetup />}
     </main>
   )
 }

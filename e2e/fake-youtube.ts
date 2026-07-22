@@ -37,6 +37,15 @@ declare global {
         emitir(estado: number): void
       }[]
     }
+    /**
+     * A superfície do YouTube que este dublê ocupa.
+     *
+     * Declarada aqui, e não reaproveitada de `src/youtube/types.ts`, porque os
+     * specs compilam num projeto de TypeScript separado do app — o mesmo
+     * isolamento que impede um teste de importar código de produção por engano.
+     */
+    YT?: unknown
+    onYouTubeIframeAPIReady?: () => void
   }
 }
 
@@ -140,7 +149,7 @@ export async function instalarYouTubeFalso(page: Page): Promise<void> {
       }
     }
 
-    window.YT = { Player: FakePlayer } as unknown as typeof window.YT
+    window.YT = { Player: FakePlayer }
     window.onYouTubeIframeAPIReady?.()
   })
 }

@@ -34,6 +34,7 @@ export function Topbar({ onOpenSettings }: TopbarProps) {
   const selectedBackgroundId = useCrono((state) => state.selectedBackgroundId)
   const autoReturn = useCrono((state) => state.preferences.autoReturnBackground)
   const theme = useCrono((state) => state.preferences.theme)
+  const churchName = useCrono((state) => state.preferences.churchName)
   const toggleTheme = useCrono((state) => state.toggleTheme)
   const setAutoReturn = useCrono((state) => state.setAutoReturnBackground)
 
@@ -92,6 +93,9 @@ export function Topbar({ onOpenSettings }: TopbarProps) {
           <b>CronoApp</b>
           <small>Painel de som</small>
         </span>
+        {/* Só existe quando há nome: sem ele, nem o separador aparece, e a
+            topbar fica exatamente como era. */}
+        {churchName && <span className="brand-church">{churchName}</span>}
       </div>
 
       <div

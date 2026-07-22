@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { controlarYouTubeFalso, instalarYouTubeFalso } from './fake-youtube'
+import { abrirPainel } from './painel'
 
 /**
  * O fluxo crítico do RNF-02.4, no app construído:
@@ -64,7 +65,7 @@ test('do zero ao fundo voltando sozinho (RNF-02.4)', async ({ page }) => {
     resultado('v-ana', 'Porque Ele Vive'),
   ])
 
-  await page.goto('/')
+  await abrirPainel(page)
   await expect(noAr(page)).toContainText('STANDBY')
 
   // 1. O fundo entra primeiro, como no culto: a trilha já está no ar quando a
@@ -130,7 +131,7 @@ test('do zero ao fundo voltando sozinho (RNF-02.4)', async ({ page }) => {
 
 test('a fila sobrevive a recarregar a página (ADR 0003)', async ({ page }) => {
   await responderBusca(page, [resultado('v-ana', 'Porque Ele Vive')])
-  await page.goto('/')
+  await abrirPainel(page)
 
   await page.getByLabel('Nome da pessoa').fill('Ana')
   await page.getByLabel('Link do YouTube').fill('https://youtu.be/dQw4w9WgXcQ')
@@ -148,7 +149,7 @@ test('a fila sobrevive a recarregar a página (ADR 0003)', async ({ page }) => {
 test('os atalhos do rodapé funcionam de verdade (RF-07)', async ({ page }) => {
   const youtube = controlarYouTubeFalso(page)
   await responderBusca(page, [resultado('bg-piano', 'Piano 3h', 10_800)])
-  await page.goto('/')
+  await abrirPainel(page)
 
   await page.getByRole('button', { name: 'Fundos' }).click()
   await page.getByLabel('Nome do fundo').fill('Piano do culto')

@@ -1404,6 +1404,19 @@ input:focus-visible,
   font-size: 11px;
   color: var(--faint);
 }
+.settings-input {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel2);
+  color: var(--text);
+  padding: 9px 11px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.settings-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 .settings-actions {
   display: flex;
   gap: 8px;
@@ -1584,4 +1597,97 @@ input:focus-visible,
   .result {
     align-items: flex-start;
   }
+}
+
+/* ---------- Nome da igreja na topbar ---------- */
+/* O separador é a borda esquerda: (logo) CronoApp | Igreja Batista Central.
+   Some junto com o nome quando ele não existe, deixando a topbar como era. */
+.brand-church {
+  padding-left: 13px;
+  border-left: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  /* A topbar é uma linha só, disputada com o NO AR e o transporte: um nome
+     longo encurta com reticências em vez de empurrar o resto. */
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Boas-vindas do primeiro arranque ---------- */
+.welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  padding: 24px;
+  animation: crOverlayIn 0.2s ease-out;
+}
+.welcome {
+  width: 100%;
+  max-width: 430px;
+  border-radius: 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 30px 30px 26px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+  animation: crModalIn 0.22s ease-out;
+}
+.welcome-badge {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  margin-bottom: 18px;
+}
+.welcome h1 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.welcome > p {
+  margin: 0 0 22px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.welcome form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.welcome label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.welcome input {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel2);
+  color: var(--text);
+  padding: 11px 13px;
+  font-size: 14px;
+  font-family: inherit;
+}
+.welcome input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.welcome form small {
+  font-size: 11px;
+  color: var(--faint);
+}
+.welcome-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 14px;
 }

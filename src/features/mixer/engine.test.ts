@@ -558,3 +558,41 @@ describe('a tela só muda quando o som acaba de sair (como o protótipo)', () =>
     expect(players.background().volume).toBeCloseTo(0.4, 2)
   })
 })
+
+describe('o fader gravado no disco tem que chegar ao som', () => {
+  /**
+   * O motor nasce **antes** de o IndexedDB responder: nesse instante o store
+   * ainda tem os faders padrão (80/40), e é com eles que o mixer é criado.
+   * Quando o disco chega, o store é atualizado — e o mixer precisa ficar
+   * sabendo, senão o número na tela e o volume no ar discordam até alguém
+   * tocar no fader.
+   *
+   * `store.getState().setXFader` é exatamente o que a hidratação faz: escreve
+   * no store por fora do motor.
+   */
+  it('o fundo volta no volume que o fader mostra (RF-05.1)', () => {
+    comFundo()
+    const ana = enfileirar('Ana', 'video-ana')
+    engine.playQueueItem(ana)
+    clock.advance(FADE_MS)
+
+    store.getState().setBackgroundFader(25)
+
+    engine.stopMain()
+    clock.advance(FADE_MS * 3)
+
+    expect(store.getState().backgroundFader).toBe(25)
+    expect(players.background().volume).toBeCloseTo(0.25, 2)
+  })
+
+  it('e o louvor entra no volume do master (RF-04.8)', () => {
+    const ana = enfileirar('Ana', 'video-ana')
+
+    store.getState().setMainFader(55)
+
+    engine.playQueueItem(ana)
+    clock.advance(FADE_MS * 2)
+
+    expect(players.main().volume).toBeCloseTo(0.55, 2)
+  })
+})

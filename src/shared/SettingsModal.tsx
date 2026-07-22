@@ -8,7 +8,7 @@ import {
   exportBackupJson,
   parseBackupJson,
 } from '../store/backup'
-import { ACCENT_COLORS, MAX_FADE_MS } from '../store/types'
+import { ACCENT_COLORS, MAX_CHURCH_NAME, MAX_FADE_MS } from '../store/types'
 
 /**
  * O modal de configurações (RF-08.1) — e o backup (RF-09.4).
@@ -39,6 +39,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const setMainFadeMs = useCrono((state) => state.setMainFadeMs)
   const setBackgroundFadeMs = useCrono((state) => state.setBackgroundFadeMs)
   const setAccent = useCrono((state) => state.setAccent)
+  const setChurchName = useCrono((state) => state.setChurchName)
   const exportState = useCrono((state) => state.exportState)
   const importState = useCrono((state) => state.importState)
 
@@ -110,6 +111,25 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           </button>
         </header>
         <p>Tempos de transição de áudio e aparência, salvos automaticamente.</p>
+
+        {/* Primeiro campo do diálogo porque é o que identifica a instalação —
+            e porque é aqui que quem pulou as boas-vindas vem procurar. */}
+        <div className="settings-field">
+          <label htmlFor="church-name">Nome da igreja</label>
+          <input
+            id="church-name"
+            className="settings-input"
+            value={preferences.churchName}
+            onChange={(event) => setChurchName(event.target.value)}
+            placeholder="Ex.: Igreja Batista Central"
+            maxLength={MAX_CHURCH_NAME}
+            autoComplete="organization"
+          />
+          <small>
+            Aparece na topbar, ao lado do nome do app. Deixe vazio para
+            esconder.
+          </small>
+        </div>
 
         <FadeField
           id="main-fade"

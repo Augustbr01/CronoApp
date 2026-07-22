@@ -2,8 +2,9 @@ import { render } from '@testing-library/react'
 import type { RenderResult } from '@testing-library/react'
 import { StrictMode, act } from 'react'
 import App from '../App'
-import { createCronoStore } from '../store'
+import { PERSIST_KEY, STATE_VERSION, createCronoStore } from '../store'
 import type { CronoStore } from '../store'
+import { DEFAULT_PREFERENCES } from '../store/types'
 import { createFakeChannelFactory } from './fake-channel'
 import type { FakeChannelFactory } from './fake-channel'
 import { createFakeScheduler } from './fake-scheduler'
@@ -52,12 +53,33 @@ export interface MontarOptions {
    * sem rede. Dois é o número que derruba os dois canais.
    */
   falharProximas?: number
+  /**
+   * Monta como **primeiro arranque**, com a tela de boas-vindas por cima.
+   *
+   * O padrão é o oposto — um app já configurado —, porque é o estado em que o
+   * painel passa 99% da vida. Deixar a tela de boas-vindas aparecer em toda
+   * montagem faria cada teste de fila, de atalho e de mixer começar tendo que
+   * dispensá-la, o que é ruído em cima de coisa que não está sendo testada.
+   */
+  primeiroArranque?: boolean
 }
 
 export async function montarPainel(
   options: MontarOptions = {},
 ): Promise<Painel> {
-  const { storage } = createMemoryStorage()
+  // Semeia o armazenamento em vez de mexer no store depois de montado: é assim
+  // que um app já usado chega de verdade — com um registro no disco —, e evita
+  // que a hidratação sobrescreva o que o teste acabou de ajustar.
+  const { storage } = createMemoryStorage(
+    options.primeiroArranque
+      ? undefined
+      : {
+          [PERSIST_KEY]: JSON.stringify({
+            state: { preferences: { ...DEFAULT_PREFERENCES, setupDone: true } },
+            version: STATE_VERSION,
+          }),
+        },
+  )
   const store = createCronoStore({ storage, legacyStorage: null })
   const players = createFakeChannelFactory()
   const clock = createFakeScheduler()

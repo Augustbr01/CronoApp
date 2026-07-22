@@ -81,7 +81,26 @@ export interface Preferences {
   theme: ThemeName
   /** O fundo volta sozinho quando o louvor sai? Desligável (RF-04.11). */
   autoReturnBackground: boolean
+  /**
+   * O nome da igreja, mostrado ao lado da marca na topbar.
+   *
+   * Vazio quer dizer duas coisas ao mesmo tempo: não há nome a mostrar **e** o
+   * app ainda não foi apresentado a ninguém — é o que dispara a tela de
+   * boas-vindas. Continua opcional depois disso: quem pular opera igual.
+   */
+  churchName: string
+  /**
+   * A tela de boas-vindas já foi mostrada?
+   *
+   * Precisa ser um campo próprio, e não `churchName !== ''`, porque pular é uma
+   * resposta legítima: quem escolheu não dar nome não pode ser perguntado de
+   * novo toda vez que abre o painel.
+   */
+  setupDone: boolean
 }
+
+/** Teto do nome da igreja, para ele não empurrar a topbar inteira. */
+export const MAX_CHURCH_NAME = 40
 
 /** Limites do RF-04.12, em ms. */
 export const MIN_FADE_MS = 0
@@ -112,6 +131,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   accent: ACCENT_COLORS[0],
   theme: 'dark',
   autoReturnBackground: true,
+  churchName: '',
+  setupDone: false,
 }
 
 /** Tudo o que o app guarda no dispositivo. */

@@ -673,13 +673,27 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
   // --- o store manda nos ajustes -----------------------------------------
 
   /**
-   * Espelha no motor o que é ajuste, não comando: durações de fade e retorno
-   * automático. Fica numa assinatura só, em vez de espalhada pelas ações, para
-   * não haver caminho em que o operador muda o ajuste e o motor não fica
-   * sabendo.
+   * Espelha no motor tudo o que é ajuste, não comando: posição dos faders,
+   * durações de fade e retorno automático. Fica numa assinatura só, em vez de
+   * espalhada pelas ações, para não haver caminho em que o store muda e o motor
+   * não fica sabendo.
+   *
+   * **Os faders estão aqui por causa de um bug que custou caro.** O motor nasce
+   * antes de o IndexedDB responder — nesse instante o store ainda tem os
+   * padrões (80/40), e é com eles que o mixer é criado. Quando o disco chega
+   * com o que o operador havia deixado, o store atualiza e o número na tela
+   * fica certo; sem esta sincronia, o **volume** continuava no padrão. O
+   * sintoma era o pior tipo: a música da fila entrava mais alta do que o master
+   * mostrava, e o fundo voltava mais alto do que o fader dele — e só se
+   * acertava quando alguém encostava no fader, o que fazia parecer defeito
+   * aleatório. Este caminho também cobre a importação de um backup (RF-09.4),
+   * que escreve os faders do mesmo jeito.
    */
   const syncSettings = (): void => {
-    const { preferences, selectedBackgroundId } = state()
+    const { preferences, selectedBackgroundId, mainFader, backgroundFader } =
+      state()
+    mixer.setFader('main', mainFader)
+    mixer.setFader('background', backgroundFader)
     mixer.setFadeMs('main', preferences.mainFadeMs)
     mixer.setFadeMs('background', preferences.backgroundFadeMs)
     // Sem faixa escolhida não há fundo para voltar — o destino é o standby.

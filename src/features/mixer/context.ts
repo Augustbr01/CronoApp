@@ -33,6 +33,31 @@ export function useCrono<T>(selector: (state: StoreState) => T): T {
   return useStore(store, selector)
 }
 
+/**
+ * O store já terminou de ler o IndexedDB?
+ *
+ * Antes disso o estado em memória é só o **padrão** — fila vazia, preferências
+ * de fábrica. Quem desenhar tela a partir dele nesse instante desenha a tela de
+ * um app recém-instalado, mesmo que o disco esteja cheio de dados.
+ *
+ * O sintoma concreto que isto evita: a tela de boas-vindas piscando na cara de
+ * quem já batizou a igreja há meses, toda vez que abre o painel. Esperar é
+ * questão de milissegundos e acontece uma vez só.
+ */
+export function useHydrated(): boolean {
+  const store = useContext(StoreContext)
+  if (!store)
+    throw new Error('useHydrated precisa estar dentro de <CronoProvider>')
+
+  // Observável externo em vez de estado + efeito: o `getSnapshot` é consultado
+  // no render, então não existe a janela em que a hidratação termina entre o
+  // primeiro render e o efeito e o componente fica achando que não terminou.
+  return useSyncExternalStore(
+    (aviseQueMudou) => store.persist.onFinishHydration(aviseQueMudou),
+    () => store.persist.hasHydrated(),
+  )
+}
+
 /** As ações do motor. A referência nunca muda. */
 export function useEngine(): AudioEngine {
   const engine = useContext(EngineContext)

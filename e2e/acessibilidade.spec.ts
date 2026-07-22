@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { instalarYouTubeFalso } from './fake-youtube'
+import { abrirPainel } from './painel'
 
 /**
  * A auditoria de acessibilidade do RNF-05, no app construído.
@@ -46,7 +47,7 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('o painel em repouso não tem violação de WCAG AA', async ({ page }) => {
-  await page.goto('/')
+  await abrirPainel(page)
   await expect(page.locator('.on-air')).toContainText('STANDBY')
 
   const { violations } = await auditar(page)
@@ -55,7 +56,7 @@ test('o painel em repouso não tem violação de WCAG AA', async ({ page }) => {
 })
 
 test('o tema claro também passa (RNF-05.4)', async ({ page }) => {
-  await page.goto('/')
+  await abrirPainel(page)
   await expect(page.locator('.on-air')).toContainText('STANDBY')
 
   // Pelo botão da topbar, que é o caminho do operador.
@@ -71,7 +72,7 @@ test('o tema claro também passa (RNF-05.4)', async ({ page }) => {
 })
 
 test('as três abas passam, cada uma com seu formulário', async ({ page }) => {
-  await page.goto('/')
+  await abrirPainel(page)
 
   for (const aba of ['Buscar música', 'Fundos', 'Fila']) {
     await page.getByRole('button', { name: aba, exact: true }).click()
@@ -83,7 +84,7 @@ test('as três abas passam, cada uma com seu formulário', async ({ page }) => {
 test('o modal de configurações prende e devolve o foco (RNF-05.1)', async ({
   page,
 }) => {
-  await page.goto('/')
+  await abrirPainel(page)
   const abrir = page.getByRole('button', { name: /Configurações/i })
   await abrir.click()
 
@@ -112,7 +113,7 @@ test('o modal de configurações prende e devolve o foco (RNF-05.1)', async ({
 test('a mudança de estado é anunciada por região viva (RNF-05.3)', async ({
   page,
 }) => {
-  await page.goto('/')
+  await abrirPainel(page)
 
   const anuncio = page.locator('[role="status"]').first()
   await expect(anuncio).toContainText(/silêncio|standby/i)

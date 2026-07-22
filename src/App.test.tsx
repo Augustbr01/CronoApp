@@ -571,3 +571,80 @@ describe('foco no fader não duplica o passo da seta', () => {
     ).toHaveAttribute('aria-valuenow', '40')
   })
 })
+
+describe('o primeiro arranque (setup do nome da igreja)', () => {
+  async function primeiroArranque() {
+    painel.unmount()
+    painel = await montarPainel({ pollMs: 60_000, primeiroArranque: true })
+  }
+
+  it('não aparece para quem já configurou', () => {
+    // O painel padrão dos testes já é um app usado — e o que ele NÃO pode
+    // fazer é piscar a tela de boas-vindas antes do IndexedDB responder.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(noAr()).toContain('STANDBY')
+  })
+
+  it('aparece no primeiro arranque e salva o nome na topbar', async () => {
+    await primeiroArranque()
+
+    const dialogo = screen.getByRole('dialog')
+    expect(dialogo).toHaveTextContent('Bem-vindo ao CronoApp')
+
+    const u = user()
+    await u.type(
+      screen.getByLabelText('Nome da igreja'),
+      'Igreja Batista Central',
+    )
+    await u.click(screen.getByRole('button', { name: 'Começar' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(painel.container.querySelector('.brand')).toHaveTextContent(
+      'Igreja Batista Central',
+    )
+    expect(painel.store.getState().preferences.churchName).toBe(
+      'Igreja Batista Central',
+    )
+  })
+
+  it('"Agora não" fecha e não volta a perguntar', async () => {
+    await primeiroArranque()
+
+    await user().click(screen.getByRole('button', { name: 'Agora não' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    // A marca de "já perguntei" é o que impede a tela de voltar toda vez que o
+    // operador abrir o painel sem ter dado nome.
+    expect(painel.store.getState().preferences.setupDone).toBe(true)
+    expect(painel.store.getState().preferences.churchName).toBe('')
+  })
+
+  it('com a tela aberta, os atalhos do painel ficam quietos (RF-07.2)', async () => {
+    await primeiroArranque()
+    const u = user()
+    await u.type(screen.getByLabelText('Nome da igreja'), 'Betel')
+
+    // "s" pararia o louvor e "3" trocaria de aba se os atalhos estivessem vivos.
+    expect(screen.getByLabelText('Nome da igreja')).toHaveValue('Betel')
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('sem nome, a topbar fica exatamente como era', async () => {
+    await primeiroArranque()
+    await user().click(screen.getByRole('button', { name: 'Agora não' }))
+
+    expect(
+      painel.container.querySelector('.brand-church'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('dá para trocar o nome depois, nas configurações', async () => {
+    const u = user()
+    await u.click(screen.getByRole('button', { name: 'Configurações' }))
+
+    await u.type(screen.getByLabelText('Nome da igreja'), 'Betel')
+
+    expect(painel.store.getState().preferences.churchName).toBe('Betel')
+    expect(painel.container.querySelector('.brand')).toHaveTextContent('Betel')
+  })
+})

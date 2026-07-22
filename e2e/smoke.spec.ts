@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { instalarYouTubeFalso } from './fake-youtube'
+import { abrirPainel } from './painel'
 
 /**
  * O app sobe, monta e chega ao estado de repouso.
@@ -14,7 +15,7 @@ test('o painel abre em standby, com a fila vazia', async ({ page }) => {
   // instabilidade da internet do CI.
   await instalarYouTubeFalso(page)
 
-  await page.goto('/')
+  await abrirPainel(page)
 
   await expect(page.getByText('CronoApp')).toBeVisible()
   await expect(page.locator('.on-air')).toContainText('STANDBY')

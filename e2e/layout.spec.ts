@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { instalarYouTubeFalso } from './fake-youtube'
+import { abrirPainel } from './painel'
 
 /**
  * O layout do RNF-06.2: **íntegro de 1280 px para cima, sem quebrar em
@@ -47,7 +48,7 @@ for (const alvo of ALVOS) {
     page,
   }) => {
     await page.setViewportSize({ width: alvo.width, height: alvo.height })
-    await page.goto('/')
+    await abrirPainel(page)
     await expect(page.locator('.on-air')).toContainText('STANDBY')
 
     expect(
@@ -69,7 +70,7 @@ for (const alvo of ALVOS) {
 
 test(`${TABLET.nome}: não quebra, mesmo não sendo o alvo`, async ({ page }) => {
   await page.setViewportSize({ width: TABLET.width, height: TABLET.height })
-  await page.goto('/')
+  await abrirPainel(page)
   await expect(page.locator('.on-air')).toContainText('STANDBY')
 
   expect(await rolagemHorizontal(page)).toBe(0)

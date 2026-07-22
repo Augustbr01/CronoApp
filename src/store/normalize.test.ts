@@ -117,6 +117,8 @@ describe('preferências', () => {
       accent: '#4f8df7',
       theme: 'light',
       autoReturnBackground: false,
+      churchName: 'Igreja Batista Central',
+      setupDone: true,
     })
 
     expect(prefs).toEqual({
@@ -125,7 +127,30 @@ describe('preferências', () => {
       accent: '#4f8df7',
       theme: 'light',
       autoReturnBackground: false,
+      churchName: 'Igreja Batista Central',
+      setupDone: true,
     })
+  })
+
+  it('estado gravado antes do nome da igreja existir vira primeiro arranque', () => {
+    // É o caminho de quem já usava o app: sem migração escrita à mão, o campo
+    // que falta cai no padrão e a tela de boas-vindas aparece uma vez.
+    const prefs = normalizePreferences({ mainFadeMs: 1500 })
+
+    expect(prefs.churchName).toBe('')
+    expect(prefs.setupDone).toBe(false)
+  })
+
+  it('limpa o nome da igreja que vem torto de um arquivo importado', () => {
+    expect(
+      normalizePreferences({ churchName: '  Igreja   Central \n' }).churchName,
+    ).toBe('Igreja Central')
+    // Um nome absurdo não pode empurrar a topbar inteira.
+    expect(
+      normalizePreferences({ churchName: 'a'.repeat(200) }).churchName,
+    ).toHaveLength(40)
+    // E o que não é texto não vira nome.
+    expect(normalizePreferences({ churchName: 42 }).churchName).toBe('')
   })
 })
 

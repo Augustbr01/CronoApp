@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
-import { instalarYouTubeFalso } from './fake-youtube'
+import { controlarYouTubeFalso, instalarYouTubeFalso } from './fake-youtube'
+import { abrirPainel, estadoGravado } from './painel'
 
 /**
  * O arraste dos faders (RF-05.6), no navegador de verdade.
@@ -27,7 +28,7 @@ async function colunaDoFundo(page: Page) {
 
 test.beforeEach(async ({ page }) => {
   await instalarYouTubeFalso(page)
-  await page.goto('/')
+  await abrirPainel(page)
   await expect(page.locator('.on-air')).toContainText('STANDBY')
 })
 
@@ -151,4 +152,45 @@ test('chegando por Tab, o anel aparece de primeira', async ({ page }) => {
   expect(await master.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe(
     'solid',
   )
+})
+
+test('o volume gravado sobrevive a recarregar — e vale para o som, não só para o número', async ({
+  page,
+}) => {
+  const fundo = page.getByRole('slider', { name: 'Volume FUNDO' })
+  const youtube = controlarYouTubeFalso(page)
+
+  // O operador deixa a mesa como gosta e fecha o app.
+  await page.locator('body').click()
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('ArrowDown')
+  expect(await valor(fundo)).toBe(25)
+  await expect
+    .poll(() => estadoGravado(page))
+    .toMatchObject({
+      backgroundFader: 25,
+    })
+
+  await page.reload()
+
+  // O número volta certo — isso já funcionava.
+  expect(await valor(fundo)).toBe(25)
+
+  // O que NÃO funcionava: o motor nasce antes de o IndexedDB responder, com os
+  // padrões 80/40, e ninguém o corrigia depois. O fundo entrava a 40 com o
+  // fader marcando 25, e só se acertava quando alguém encostava no fader — o
+  // que fazia o defeito parecer aleatório.
+  await page.getByRole('button', { name: 'Fundos' }).click()
+  await page.getByLabel('Nome do fundo').fill('Piano do culto')
+  await page
+    .getByLabel('Link do fundo no YouTube')
+    .fill('https://youtu.be/M7lc1UVf-VE')
+  await page.getByRole('button', { name: 'Adicionar' }).click()
+
+  await expect
+    .poll(async () => (await youtube.volumes()).background, {
+      message: 'o fundo entrou num volume diferente do que o fader mostra',
+    })
+    .toBe(25)
 })

@@ -1,4 +1,4 @@
-import { clampFadeMs } from './slices/preferences'
+import { cleanChurchName, clampFadeMs } from './slices/preferences'
 import { createId } from './ids'
 import {
   ACCENT_COLORS,
@@ -139,6 +139,11 @@ export function normalizePreferences(value: unknown): Preferences {
       value.autoReturnBackground,
       DEFAULT_PREFERENCES.autoReturnBackground,
     ),
+    // Um estado gravado antes deste campo existir não tem `churchName` — cai no
+    // vazio, e o app apresenta a tela de boas-vindas uma vez. É o mesmo caminho
+    // de qualquer campo novo: normalizar em vez de escrever uma migração.
+    churchName: cleanChurchName(asString(value.churchName)),
+    setupDone: asBoolean(value.setupDone, DEFAULT_PREFERENCES.setupDone),
   }
 }
 
