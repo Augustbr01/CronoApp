@@ -1,8 +1,9 @@
 import { Plus } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { QueueCard } from './QueueCard'
 import { useCrono, useEngine } from '../mixer/context'
+import { fetchVideoInfo } from '../../youtube/oembed'
 import { parseVideoId } from '../../youtube/video-id'
 
 /**
@@ -15,8 +16,12 @@ import { parseVideoId } from '../../youtube/video-id'
  * O formulário faz a única validação que importa aqui: o link tem que ser um
  * vídeo do YouTube reconhecível. Recusar na entrada, com a frase na tela, é
  * muito melhor do que aceitar e o operador descobrir no domingo que o item não
- * toca (RF-01.3 completo — detectar embed bloqueado — depende do oEmbed da
- * Etapa 5).
+ * toca.
+ *
+ * O título e a duração chegam **depois** do item, pelo oEmbed (RF-01.2): quem
+ * cola um link não espera a rede para ver a linha aparecer. Junto com eles vem
+ * o aviso de embed bloqueado (RF-01.3), que é o que transforma um erro 101 no
+ * domingo num alerta no sábado.
  */
 export function QueueTab() {
   const engine = useEngine()
@@ -24,6 +29,7 @@ export function QueueTab() {
   const currentId = useCrono((state) => state.currentId)
   const mode = useCrono((state) => state.mode)
   const addToQueue = useCrono((state) => state.addToQueue)
+  const describeQueueItem = useCrono((state) => state.describeQueueItem)
   const renameQueueItem = useCrono((state) => state.renameQueueItem)
   const reorderQueue = useCrono((state) => state.reorderQueue)
 
@@ -31,6 +37,18 @@ export function QueueTab() {
   const [url, setUrl] = useState('')
   const [erro, setErro] = useState('')
   const [dragged, setDragged] = useState<number | null>(null)
+
+  // Desmontar no meio de uma consulta — o operador trocando de aba logo depois
+  // de colar — cancela o que estiver no ar, em vez de escrever no store de um
+  // componente que já saiu (RNF-04.2).
+  const emVoo = useRef<AbortController[]>([])
+  useEffect(
+    () => () => {
+      for (const controller of emVoo.current) controller.abort()
+      emVoo.current = []
+    },
+    [],
+  )
 
   const submit = (event: FormEvent): void => {
     event.preventDefault()
@@ -42,7 +60,9 @@ export function QueueTab() {
       return
     }
 
-    addToQueue({
+    // O item entra na hora, com o rótulo genérico. Esperar a rede aqui faria o
+    // operador olhar para um formulário parado achando que o clique não pegou.
+    const id = addToQueue({
       name: name.trim(),
       videoId,
       title: 'Vídeo do YouTube',
@@ -50,6 +70,21 @@ export function QueueTab() {
     setName('')
     setUrl('')
     setErro('')
+
+    const controller = new AbortController()
+    emVoo.current.push(controller)
+    void fetchVideoInfo({ videoId, signal: controller.signal }).then((info) => {
+      emVoo.current = emVoo.current.filter((atual) => atual !== controller)
+      // `null` é o caso normal de "não deu": sem endpoint, sem rede, vídeo
+      // removido. O item fica com o rótulo genérico e o culto segue.
+      if (!info) return
+      describeQueueItem(id, {
+        title: info.title,
+        durationSec: info.durationSec,
+        thumbnailUrl: info.thumbnailUrl,
+        embedBlocked: !info.embeddable,
+      })
+    })
   }
 
   return (

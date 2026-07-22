@@ -63,6 +63,8 @@ src/
   store/       slices Zustand + persistência IndexedDB + migrações
   features/    queue · search · backgrounds · mixer
   shared/      componentes de UI, hooks, utilitários
+server/        a lógica do backend — cache, limite por IP, cota, Data API
+api/           os pontos de entrada da Vercel, finos, que só apontam pra server/
 ```
 
 ## Estado do desenvolvimento
@@ -75,5 +77,7 @@ src/
       migração versionada, resgate do `localStorage` do protótipo, backup JSON.
 - [x] **Etapa 4 — Interface**: painel reconstruído por domínio, atalhos de
       teclado, Error Boundary global, foco gerenciado no modal.
-- [ ] Etapa 5 — Backend de busca
+- [x] **Etapa 5 — Backend de busca**: endpoint de busca com cache, limite por
+      IP e contador de cota; oEmbed preenchendo título, duração e aviso de embed
+      bloqueado ao colar link.
 - [ ] Etapa 6 — Endurecimento e entrega

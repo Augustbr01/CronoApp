@@ -444,3 +444,65 @@ describe('o player que não conseguiu nascer (RNF-03.4)', () => {
     ).not.toBeInTheDocument()
   })
 })
+
+describe('colar link preenche o título pelo oEmbed (RF-01.2)', () => {
+  const INFO = {
+    id: 'dQw4w9WgXcQ',
+    title: 'Porque Ele Vive - Harpa Cristã',
+    channel: 'Canal do Louvor',
+    duration: 253,
+    embeddable: true,
+  }
+
+  function servidorResponde(body: unknown, status = 200) {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('o item entra na hora e o título desce por cima quando a rede responde', async () => {
+    servidorResponde(INFO)
+
+    await enfileirar('Ana', 'https://youtu.be/dQw4w9WgXcQ')
+
+    // Não espera a rede: a linha já está lá com o rótulo genérico.
+    expect(screen.getByText('Ana')).toBeInTheDocument()
+
+    await painel.flush()
+    expect(
+      await screen.findByText('Porque Ele Vive - Harpa Cristã'),
+    ).toBeInTheDocument()
+    // E a duração vem junto, sem precisar tocar o vídeo primeiro.
+    expect(painel.store.getState().queue[0]?.durationSec).toBe(253)
+  })
+
+  it('avisa que o vídeo não toca fora do YouTube antes do culto (RF-01.3)', async () => {
+    servidorResponde({ ...INFO, embeddable: false })
+
+    await enfileirar('Ana', 'https://youtu.be/dQw4w9WgXcQ')
+    await painel.flush()
+
+    expect(
+      await screen.findByTitle('Este vídeo não toca fora do YouTube'),
+    ).toBeInTheDocument()
+  })
+
+  it('sem o endpoint no servidor, o item continua na fila e tocável', async () => {
+    servidorResponde({ error: 'não existe' }, 404)
+
+    await enfileirar('Ana', 'https://youtu.be/dQw4w9WgXcQ')
+    await painel.flush()
+
+    // Rótulo genérico, mas o culto não depende disso.
+    expect(screen.getByText('Vídeo do YouTube')).toBeInTheDocument()
+    await user().click(screen.getByRole('button', { name: 'Tocar Ana' }))
+    expect(painel.players.main().loads).toEqual(['dQw4w9WgXcQ'])
+  })
+})

@@ -15,6 +15,14 @@ import type { StoreState } from '../types-store'
 /** O que se informa ao adicionar; o resto o store preenche. */
 export type NewQueueItem = Omit<QueueItem, 'id' | 'addedAt'>
 
+/** O que o oEmbed descobre sobre um item que já está na fila (RF-01.2). */
+export interface QueueItemInfo {
+  title?: string
+  durationSec?: number
+  thumbnailUrl?: string
+  embedBlocked?: boolean
+}
+
 export interface QueueSlice {
   queue: QueueItem[]
   /** Adiciona ao fim da fila e devolve o id criado. */
@@ -25,10 +33,23 @@ export interface QueueSlice {
   /** Move um item de posição, para o arrastar e soltar (RF-01.4). */
   reorderQueue(from: number, to: number): void
   /**
-   * Anota a duração que o player descobriu ao carregar o vídeo. Até a Etapa 5
-   * (oEmbed no momento de colar o link) é a única fonte real desse número.
+   * Anota a duração que o player descobriu ao carregar o vídeo. É a fonte de
+   * quem foi adicionado pela busca; para quem foi colado, o oEmbed já traz o
+   * número antes de tocar (RF-01.2).
    */
   setQueueItemDuration(id: string, durationSec: number): void
+  /**
+   * Preenche o que o oEmbed descobriu depois que o item já entrou na fila
+   * (RF-01.2 e RF-01.3).
+   *
+   * Chega **depois** de propósito: o item aparece na hora em que o operador
+   * aperta Adicionar, e o título desce por cima quando a rede responder. Se não
+   * responder, fica o rótulo genérico e nada quebra.
+   *
+   * Não mexe no `name`: aquele é do operador, e sobrescrever o que ele digitou
+   * seria o app achando que sabe mais do que ele.
+   */
+  describeQueueItem(id: string, info: QueueItemInfo): void
   clearQueue(): void
   /** O primeiro item da fila — o que o atalho "próxima" toca (RF-07.1). */
   nextInQueue(): QueueItem | null
@@ -95,6 +116,33 @@ export const createQueueSlice: StateCreator<StoreState, [], [], QueueSlice> = (
       queue: state.queue.map((item) =>
         item.id === id ? { ...item, durationSec } : item,
       ),
+    }))
+  },
+
+  describeQueueItem(id, info) {
+    set((state) => ({
+      queue: state.queue.map((item) => {
+        if (item.id !== id) return item
+
+        // Campo a campo, e só o que veio de verdade: uma resposta parcial não
+        // pode apagar o que já se sabia. Título vazio, em especial, deixaria a
+        // linha da fila sem rótulo nenhum.
+        const atualizado: QueueItem = { ...item }
+        const title = info.title?.trim()
+        if (title) atualizado.title = title
+        if (
+          typeof info.durationSec === 'number' &&
+          Number.isFinite(info.durationSec) &&
+          info.durationSec > 0
+        ) {
+          atualizado.durationSec = info.durationSec
+        }
+        if (info.thumbnailUrl) atualizado.thumbnailUrl = info.thumbnailUrl
+        if (info.embedBlocked !== undefined) {
+          atualizado.embedBlocked = info.embedBlocked
+        }
+        return atualizado
+      }),
     }))
   },
 

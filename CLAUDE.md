@@ -33,10 +33,17 @@ src/
     backgrounds/ biblioteca de fundos
     mixer/       faders, meters, transporte
   shared/      componentes de UI, hooks, utilitários
+
+server/        backend de busca — cache, limite por IP, cota, Data API, oEmbed
+api/           entrypoints da Vercel: cinco linhas cada, apontando pra server/
 ```
 
 Fluxo de dependência: `features/*` e a UI dependem de `audio/`, `youtube/` e
 `store/`; nunca o contrário. `audio/` não importa nada dos outros três.
+
+`server/` e `src/` não se importam **em nenhuma direção**. A fronteira entre os
+dois é HTTP, e é ela que mantém a `YOUTUBE_API_KEY` fora do bundle (RNF-06.4) —
+confira com `npm run build` e um `grep` em `dist/assets`.
 
 ## Convenções
 

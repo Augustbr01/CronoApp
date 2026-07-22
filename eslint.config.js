@@ -52,9 +52,16 @@ export default defineConfig([
   },
   // Node-side tooling and end-to-end specs.
   {
-    files: ['*.config.{ts,js}', 'e2e/**/*.ts', 'api/**/*.ts'],
+    files: ['*.config.{ts,js}', 'e2e/**/*.ts', 'api/**/*.ts', 'server/**/*.ts'],
     languageOptions: {
       globals: globals.node,
+    },
+  },
+  // Server-side tests get the Vitest globals on top of the Node ones.
+  {
+    files: ['server/**/*.test.ts'],
+    languageOptions: {
+      globals: { ...globals.node, ...vitestGlobals },
     },
   },
   eslintConfigPrettier,
