@@ -23,7 +23,14 @@ const vitestGlobals = {
 }
 
 export default defineConfig([
-  globalIgnores(['dist', 'coverage', 'playwright-report', 'test-results']),
+  globalIgnores([
+    'dist',
+    'coverage',
+    'playwright-report',
+    'test-results',
+    // Cópia deixada pelo Syncthing ao resolver um conflito — ver .gitignore.
+    '**/*.sync-conflict-*',
+  ]),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

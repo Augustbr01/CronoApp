@@ -17,10 +17,14 @@
     "jsx": "react-jsx",
 
     /* Linting */
+    "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  /* Cópia que o Syncthing deixa ao resolver um conflito: é o mesmo módulo duas
+     vezes, e compilá-la só produz erro em código que ninguém importa. */
+  "exclude": ["src/**/*.sync-conflict-*"]
 }
