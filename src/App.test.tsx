@@ -648,3 +648,23 @@ describe('o primeiro arranque (setup do nome da igreja)', () => {
     expect(painel.container.querySelector('.brand')).toHaveTextContent('Betel')
   })
 })
+
+describe('a assinatura do rodapé', () => {
+  it('leva ao perfil do GitHub, e abre sem dar acesso a esta aba', () => {
+    const link = screen.getByRole('link', { name: /Augusto Corrêa/ })
+
+    expect(link).toHaveAttribute('href', 'https://github.com/Augustbr01')
+    expect(link).toHaveAttribute('target', '_blank')
+    // Sem `noreferrer`, a aba aberta ganha `window.opener` para esta.
+    expect(link).toHaveAttribute('rel', 'noreferrer')
+  })
+
+  it('o nome é o texto do link — o logo é decorativo', () => {
+    const link = screen.getByRole('link', { name: /Augusto Corrêa/ })
+
+    // Leitor de tela anuncia "Desenvolvido por Augusto Corrêa", e nada mais:
+    // o SVG é `aria-hidden`, senão sobraria um "imagem" no meio da frase.
+    expect(link).toHaveAccessibleName('Desenvolvido por Augusto Corrêa')
+    expect(link.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+  })
+})

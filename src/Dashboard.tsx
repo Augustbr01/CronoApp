@@ -11,6 +11,7 @@ import { useCrono, useEngine, useHydrated } from './features/mixer/context'
 import { HistoryPanel } from './features/queue/HistoryPanel'
 import { QueueTab } from './features/queue/QueueTab'
 import { SearchTab } from './features/search/SearchTab'
+import { Credit } from './shared/Credit'
 import { SettingsModal } from './shared/SettingsModal'
 import { WelcomeSetup } from './shared/WelcomeSetup'
 import { useOnlineStatus } from './shared/hooks'
@@ -125,7 +126,17 @@ export function Dashboard() {
           {tab === 'backgrounds' && <BackgroundsTab />}
         </div>
 
-        <aside className="secondary-pane">
+        {/* `tabIndex` porque a coluna rola por dentro desde que a altura do
+            painel passou a ser a do viewport: área rolável que não recebe foco
+            é conteúdo inalcançável para quem navega por teclado — foi a
+            auditoria do axe que pegou (`scrollable-region-focusable`). O rótulo
+            existe para o ponto de parada dizer o que é, em vez de ser um
+            "grupo" mudo no leitor de tela. */}
+        <aside
+          className="secondary-pane"
+          tabIndex={0}
+          aria-label="Pré-escuta, fundo musical e histórico"
+        >
           <PreviewDeck />
           <DeckPanel />
           <HistoryPanel />
@@ -166,6 +177,7 @@ export function Dashboard() {
           <kbd>3</kbd> abas
         </span>
         <span>dados salvos neste dispositivo</span>
+        <Credit />
       </footer>
 
       <FadeToasts />

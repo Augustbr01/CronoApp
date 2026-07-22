@@ -31,6 +31,14 @@ const ALVOS = [
 /** Não é alvo primário, mas não pode quebrar. */
 const TABLET = { nome: '1024×768 — tablet deitado', width: 1024, height: 768 }
 
+async function rolagemVertical(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      document.documentElement.scrollHeight -
+      document.documentElement.clientHeight,
+  )
+}
+
 async function rolagemHorizontal(page: Page): Promise<number> {
   return page.evaluate(
     () =>
@@ -77,4 +85,52 @@ test(`${TABLET.nome}: não quebra, mesmo não sendo o alvo`, async ({ page }) =>
   await expect(page.locator('.mixer-pane')).toBeVisible()
   // O básico continua operável: dá para enfileirar alguém.
   await expect(page.getByLabel('Link do YouTube')).toBeVisible()
+})
+
+test('a busca de fundos não estica a página (rola dentro da caixa)', async ({
+  page,
+}) => {
+  await page.route('**/api/youtube/search*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: Array.from({ length: 10 }, (_, i) => ({
+          id: `bg-${i}`,
+          title: `Piano Worship Vol. ${i + 1} — 3 horas de instrumental`,
+          channel: 'Worship Piano',
+          duration: 10_800,
+        })),
+      }),
+    }),
+  )
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await abrirPainel(page)
+
+  const alturaAntes = await page.evaluate(
+    () => document.documentElement.scrollHeight,
+  )
+
+  await page.getByRole('button', { name: 'Fundos' }).click()
+  await page.getByLabel('Buscar fundo musical').fill('piano worship')
+  await page.getByRole('button', { name: 'Buscar', exact: true }).click()
+  await page.getByText('Piano Worship Vol. 1 — 3').first().waitFor()
+
+  // A página não cresceu: antes desta correção ela ia de 759 px para 1254 num
+  // viewport de 720, levando a topbar e os faders para fora da vista.
+  expect(
+    await page.evaluate(() => document.documentElement.scrollHeight),
+    'a busca esticou a página em vez de rolar dentro da caixa',
+  ).toBe(alturaAntes)
+  expect(await rolagemVertical(page)).toBe(0)
+
+  // E o que rola é a caixa de resultados, com o campo de busca e a biblioteca
+  // parados onde estavam.
+  const lista = page.locator('.result-list')
+  expect(
+    await lista.evaluate((el) => el.scrollHeight - el.clientHeight),
+    'a caixa de resultados não ficou rolável',
+  ).toBeGreaterThan(0)
+  await expect(page.getByLabel('Buscar fundo musical')).toBeInViewport()
+  await expect(page.getByText('BIBLIOTECA DE FUNDOS')).toBeInViewport()
 })

@@ -48,6 +48,20 @@ button:disabled {
   --live: #ff5044;
   --live-soft: rgba(255, 80, 68, 0.12);
   --warn: #f5c95e;
+  /* `height`, e não só `min-height`: com apenas o mínimo, a altura do painel é
+     a do conteúdo, e nada aqui dentro tem contra o que rolar — o
+     `overflow-y: auto` dos painéis nunca chegava a valer, porque a caixa nunca
+     ficava menor do que o que havia nela. Uma busca de fundos com dez
+     resultados esticava a página de 759 px para 1254 num viewport de 720, e a
+     topbar e os faders saíam de vista.
+
+     Com a altura fechada no viewport, a `.workbench` encolhe (ela é `flex: 1`
+     com `min-height: 0`) e cada painel rola por dentro, que é o que uma mesa de
+     som precisa: os controles ficam sempre no mesmo lugar.
+
+     Em tela estreita isto é desfeito — lá o painel vira uma coluna e rolar a
+     página é o comportamento certo. */
+  height: 100vh;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -371,10 +385,22 @@ input:focus-visible,
   flex: 1;
   min-height: 0;
 }
+/* Os dois painéis rolam **por dentro**, e o `min-height: 0` é o que faz isso
+   funcionar de verdade.
+
+   Sem ele, o tamanho mínimo automático de um item de grade é o do próprio
+   conteúdo: a coluna crescia para caber os dez resultados da busca, empurrava a
+   `.workbench`, e a página inteira passava a rolar na vertical — com a topbar e
+   os faders saindo de vista. O `overflow-y: auto` estava ali desde sempre e
+   nunca chegava a valer, porque a caixa nunca ficava menor que o conteúdo.
+
+   Medido: buscar fundos levava a página de 759 px para 1254 px num viewport de
+   720. Ver `e2e/layout.spec.ts`. */
 .primary-pane {
   background: var(--bg);
   padding: 22px 26px;
   min-width: 0;
+  min-height: 0;
   overflow-y: auto;
 }
 .secondary-pane {
@@ -384,6 +410,7 @@ input:focus-visible,
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -474,6 +501,18 @@ input:focus-visible,
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+/* A caixa de resultados rola dentro de si.
+   Sem isto, dez resultados empurrariam o campo de busca e os chips de
+   categoria para fora da vista, e a Biblioteca de fundos — que é o que o
+   operador usa durante o culto — ficaria a uma rolagem inteira de distância.
+   Com o teto, o que está acima e abaixo da caixa não sai do lugar. */
+.result-list {
+  max-height: 44vh;
+  overflow-y: auto;
+  /* Espaço para a barra de rolagem e para o anel de foco dos botões não serem
+     cortados na borda. */
+  padding-right: 4px;
 }
 .queue-card {
   display: flex;
@@ -1514,6 +1553,9 @@ input:focus-visible,
 }
 @media (max-width: 860px) {
   .app-shell {
+    /* A altura fechada é do layout de três colunas. Aqui o painel vira uma
+       coluna só, mais alta que a tela, e rolar a página é o certo. */
+    height: auto;
     overflow: visible;
   }
   .topbar {
@@ -1690,4 +1732,32 @@ input:focus-visible,
   justify-content: flex-end;
   gap: 9px;
   margin-top: 14px;
+}
+
+/* ---------- Assinatura no rodapé ---------- */
+.credit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--faint);
+  text-decoration: none;
+  white-space: nowrap;
+  /* Sempre encostada na direita. Em tela larga ela fecha a linha dos atalhos;
+     quando não cabe, desce alinhada à direita em vez de ficar órfã à esquerda
+     — assim a quebra parece decisão, e não descuido. */
+  margin-left: auto;
+}
+.credit:hover {
+  color: var(--muted);
+}
+.credit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+/* O "dados salvos neste dispositivo" empurrava tudo para a direita com
+   `span:last-child`. Agora quem fecha a linha é a assinatura, então o empurrão
+   passa para o penúltimo item. */
+.shortcuts span:last-of-type {
+  margin-left: auto;
 }
