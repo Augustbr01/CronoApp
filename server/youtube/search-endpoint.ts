@@ -1,18 +1,18 @@
-import { createCache } from '../cache'
-import type { Cache } from '../cache'
-import { clientIp, readUrl, sendJson } from '../http'
-import type { HttpRequest, HttpResponse } from '../http'
-import { QUOTA_COST, createQuotaLedger } from '../quota'
-import type { QuotaLedger } from '../quota'
-import { createRateLimiter } from '../rate-limit'
-import type { RateLimiter } from '../rate-limit'
+import { createCache } from '../cache.js'
+import type { Cache } from '../cache.js'
+import { clientIp, readUrl, sendJson } from '../http.js'
+import type { HttpRequest, HttpResponse } from '../http.js'
+import { QUOTA_COST, createQuotaLedger } from '../quota.js'
+import type { QuotaLedger } from '../quota.js'
+import { createRateLimiter } from '../rate-limit.js'
+import type { RateLimiter } from '../rate-limit.js'
 import {
   YouTubeApiError,
   fetchVideoDetails,
   searchVideos,
   withDurations,
-} from './data-api'
-import type { VideoDuration, VideoResult } from './data-api'
+} from './data-api.js'
+import type { VideoDuration, VideoResult } from './data-api.js'
 
 /**
  * `GET /api/youtube/search?q=&duration=` — o endpoint que o RF-10 descreve.
@@ -172,6 +172,19 @@ export function createSearchEndpoint(deps: SearchEndpointDeps = {}) {
         })
         return
       }
+
+      // Problema de instalação não é problema de momento: insistir não resolve,
+      // e mandar o operador "tentar de novo" o faz perder tempo num botão que
+      // nunca vai funcionar. A frase aponta para quem consegue consertar.
+      if (error instanceof YouTubeApiError && error.misconfigured) {
+        console.error('Chave da YouTube Data API recusada:', error.message)
+        sendJson(response, 503, {
+          error:
+            'O YouTube recusou a chave deste servidor. Confira, no Google Cloud, se a YouTube Data API v3 está habilitada e se a chave não tem restrição de site ou de IP — chamada de servidor é sempre recusada por essas restrições.',
+        })
+        return
+      }
+
       console.error('Falha na busca do YouTube:', error)
       sendJson(response, 502, {
         error: 'Não foi possível consultar o YouTube agora. Tente novamente.',

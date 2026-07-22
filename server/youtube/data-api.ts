@@ -1,4 +1,4 @@
-import { durationToSeconds } from './duration'
+import { durationToSeconds } from './duration.js'
 
 /**
  * O cliente da YouTube Data API v3 — o único lugar do projeto que fala com o
@@ -53,14 +53,56 @@ export interface VideoDetails {
 export class YouTubeApiError extends Error {
   readonly status: number
   readonly quotaExceeded: boolean
+  /** O `reason` cru do Google, quando ele mandou um. Vai para o log. */
+  readonly reason: string | null
+  /**
+   * O problema é de **instalação**, não de momento.
+   *
+   * Chave inválida, API não habilitada no projeto, chave restrita a certos IPs
+   * ou domínios: nada disso melhora tentando de novo, e todos exigem que
+   * alguém abra o Google Cloud Console. Misturar esses casos com "o YouTube
+   * não respondeu agora" manda o operador insistir num botão que nunca vai
+   * funcionar.
+   */
+  readonly misconfigured: boolean
 
-  constructor(message: string, status: number, quotaExceeded = false) {
+  constructor(
+    message: string,
+    status: number,
+    options: {
+      quotaExceeded?: boolean
+      reason?: string | null
+      misconfigured?: boolean
+    } = {},
+  ) {
     super(message)
     this.name = 'YouTubeApiError'
     this.status = status
-    this.quotaExceeded = quotaExceeded
+    this.quotaExceeded = options.quotaExceeded ?? false
+    this.reason = options.reason ?? null
+    this.misconfigured = options.misconfigured ?? false
   }
 }
+
+/**
+ * Motivos que o Google devolve quando o problema é a **configuração da chave**.
+ *
+ * - `keyInvalid` / `badRequest` — a chave não é uma chave válida. O caso mais
+ *   comum é ela ter sido colada com aspas ou uma quebra de linha junto.
+ * - `accessNotConfigured` — a YouTube Data API v3 não está habilitada no
+ *   projeto do Google Cloud.
+ * - `ipRefererBlocked` / `forbidden` — a chave tem restrição de aplicativo
+ *   (referenciador HTTP ou faixa de IP). Chamada de servidor não manda
+ *   referenciador e sai de um IP que muda, então ela é sempre recusada — mesmo
+ *   que a chave funcione no navegador ou na máquina de quem a criou.
+ */
+const MOTIVOS_DE_CONFIGURACAO: readonly string[] = [
+  'keyInvalid',
+  'badRequest',
+  'accessNotConfigured',
+  'ipRefererBlocked',
+  'forbidden',
+]
 
 export interface DataApiOptions {
   apiKey: string
@@ -202,21 +244,34 @@ async function getJson<T>(
   try {
     response = await fetchImpl(url, { signal: AbortSignal.timeout(timeoutMs) })
   } catch {
-    throw new YouTubeApiError('O YouTube não respondeu a tempo.', 504)
+    throw new YouTubeApiError('O YouTube não respondeu a tempo.', 504, {})
   }
 
   if (!response.ok) {
     const motivo = await readErrorReason(response)
+
     if (motivo === 'quotaExceeded' || motivo === 'dailyLimitExceeded') {
       throw new YouTubeApiError(
         'A cota diária de busca do YouTube acabou.',
         response.status,
-        true,
+        { quotaExceeded: true, reason: motivo },
       )
     }
+
+    if (motivo !== null && MOTIVOS_DE_CONFIGURACAO.includes(motivo)) {
+      throw new YouTubeApiError(
+        `A chave da YouTube Data API foi recusada (${motivo}).`,
+        response.status,
+        { reason: motivo, misconfigured: true },
+      )
+    }
+
+    // O motivo entra na mensagem mesmo quando não sabemos o que fazer com ele:
+    // é ele que aparece no log e encurta a investigação da próxima vez.
     throw new YouTubeApiError(
-      `O YouTube respondeu com ${response.status}.`,
+      `O YouTube respondeu com ${response.status}${motivo ? ` (${motivo})` : ''}.`,
       response.status,
+      { reason: motivo },
     )
   }
 

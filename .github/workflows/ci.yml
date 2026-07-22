@@ -28,6 +28,12 @@ jobs:
       - name: Format check
         run: npm run format:check
 
+      # Antes do build, porque é estático e barato: pega import relativo sem
+      # extensão em api/ e server/, que o TypeScript, o Vitest e o Vite
+      # resolvem sozinhos e o Node em produção não.
+      - name: API imports
+        run: npm run check:api
+
       - name: Test
         run: npm run test
 

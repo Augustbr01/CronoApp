@@ -1,4 +1,4 @@
-import { createOembedEndpoint } from '../../server/youtube/oembed-endpoint'
+import { createOembedEndpoint } from '../../server/youtube/oembed-endpoint.js'
 
 /**
  * `GET /api/youtube/oembed?id=` — o ponto de entrada da Vercel.
