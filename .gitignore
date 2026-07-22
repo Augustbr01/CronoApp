@@ -23,6 +23,11 @@ test-results
 .env.*
 !.env.example
 
+# Conflitos do Syncthing — a pasta é sincronizada entre máquinas, e um
+# `engine.sync-conflict-….ts` dentro de src/ é compilado, lintado e testado
+# junto com o original.
+*.sync-conflict-*
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -34,6 +39,7 @@ test-results
 *.sln
 *.sw?
 
+# O plano de trabalho e as revisões são nossos, não do repositório.
+# O guia de arquitetura (CLAUDE.md) e as ADRs ficam versionados: são eles que
+# explicam a estrutura a quem clonar.
 docs/
-CLAUDE.md
-adr/
