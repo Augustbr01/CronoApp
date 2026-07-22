@@ -334,3 +334,42 @@ describe('cota diária do projeto', () => {
     expect(response.json().error).toMatch(/Cole o link/)
   })
 })
+
+describe('chave recusada pelo Google (RNF-03.3)', () => {
+  /** O corpo de erro que a Data API devolve, com o motivo dentro. */
+  function recusa(status: number, reason: string) {
+    return { status, body: { error: { errors: [{ reason }] } } }
+  }
+
+  it.each([
+    ['keyInvalid', 'chave colada com aspas ou quebra de linha'],
+    ['accessNotConfigured', 'API não habilitada no projeto'],
+    ['ipRefererBlocked', 'chave restrita a site ou IP'],
+    ['forbidden', 'restrição genérica'],
+  ])('%s vira 503 com o caminho da correção — %s', async (reason) => {
+    const response = fakeResponse()
+
+    await montar({ fetchImpl: fakeFetch([recusa(403, reason)]) })(
+      fakeRequest({ url: '/api/youtube/search?q=piano' }),
+      response,
+    )
+
+    // 503, e não 502: problema de instalação não melhora tentando de novo, e
+    // "tente novamente" faria o operador insistir num botão morto.
+    expect(response.statusCode).toBe(503)
+    expect(response.json().error).toMatch(/Google Cloud/)
+    expect(response.json().error).toMatch(/restrição de site ou de IP/)
+  })
+
+  it('falha sem motivo conhecido continua sendo 502 e "tente de novo"', async () => {
+    const response = fakeResponse()
+
+    await montar({ fetchImpl: fakeFetch([{ status: 500, body: {} }]) })(
+      fakeRequest({ url: '/api/youtube/search?q=piano' }),
+      response,
+    )
+
+    expect(response.statusCode).toBe(502)
+    expect(response.json().error).toMatch(/Tente novamente/)
+  })
+})
