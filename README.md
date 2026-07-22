@@ -36,8 +36,6 @@ npm run dev
 | ----------------- | ----------- | ----------------------------------------------------------- |
 | `YOUTUBE_API_KEY` | Só servidor | Chave da YouTube Data API v3 para o endpoint `/api/youtube` |
 
-
-
 ## Scripts
 
 | Comando                 | O que faz                                     |
@@ -56,7 +54,7 @@ npm run dev
 
 ## Arquitetura
 
-Estrutura por domínio 
+Estrutura por domínio
 
 ```
 src/
@@ -71,8 +69,11 @@ src/
 
 - [x] **Etapa 1 — Fundação**: scaffold, TS estrito, ESLint + Prettier, Vitest +
       Testing Library + Playwright, CI, estrutura por domínio, documentação.
-- [ ] Etapa 2 — Motor de áudio isolado e testado
-- [ ] Etapa 3 — Domínio e persistência (IndexedDB)
-- [ ] Etapa 4 — Interface
+- [x] **Etapa 2 — Motor de áudio**: fade de potência constante, crossfade,
+      suavização do fader, wrapper da IFrame API, mixer com laço por quadro.
+- [x] **Etapa 3 — Domínio e persistência**: store por fatias, IndexedDB,
+      migração versionada, resgate do `localStorage` do protótipo, backup JSON.
+- [x] **Etapa 4 — Interface**: painel reconstruído por domínio, atalhos de
+      teclado, Error Boundary global, foco gerenciado no modal.
 - [ ] Etapa 5 — Backend de busca
 - [ ] Etapa 6 — Endurecimento e entrega

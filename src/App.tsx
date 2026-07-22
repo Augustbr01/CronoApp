@@ -1,15 +1,25 @@
+import { Dashboard } from './Dashboard'
+import { CronoProvider } from './features/mixer/AudioEngineProvider'
+import type { CronoProviderProps } from './features/mixer/AudioEngineProvider'
+import { ErrorBoundary } from './shared/ErrorBoundary'
+
 /**
- * Shell mínimo do CronoApp.
+ * A raiz: rede de proteção por fora, motor e store por dentro, painel no meio.
  *
- * A UI real (topbar NO AR/STANDBY, abas Fila/Buscar/Fundos, mixer) é
- * reconstruída na Etapa 4, sobre o motor de áudio (Etapa 2) e o store
- * (Etapa 3). Por ora, apenas confirma que a fundação monta e renderiza.
+ * A ordem importa. O `ErrorBoundary` fica **fora** do provedor para pegar
+ * também a explosão que acontecer na montagem do motor — se ele estivesse
+ * dentro, esse caso levaria a tela ao branco, que é o pior cenário no meio de
+ * um culto (RNF-03.1).
  */
-export default function App() {
+
+export type AppProps = Pick<CronoProviderProps, 'store' | 'engineOptions'>
+
+export default function App({ store, engineOptions }: AppProps = {}) {
   return (
-    <main className="app-shell">
-      <h1>CronoApp</h1>
-      <p>Painel de operação de som para culto ao vivo.</p>
-    </main>
+    <ErrorBoundary>
+      <CronoProvider store={store} engineOptions={engineOptions}>
+        <Dashboard />
+      </CronoProvider>
+    </ErrorBoundary>
   )
 }
