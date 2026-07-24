@@ -36,7 +36,11 @@ export function AddBackgroundForm() {
       return
     }
 
-    engine.addBackground({ videoId, title: title.trim() || 'Fundo musical' })
+    engine.addBackground({
+      kind: 'youtube',
+      videoId,
+      title: title.trim() || 'Fundo musical',
+    })
     setTitle('')
     setUrl('')
     setErro('')

@@ -79,7 +79,9 @@ describe('adicionar à fila (RF-01.1)', () => {
 
     expect(screen.getByText('Ana')).toBeInTheDocument()
     expect(screen.getByText('1 na fila')).toBeInTheDocument()
-    expect(painel.store.getState().queue[0]?.videoId).toBe('dQw4w9WgXcQ')
+    expect(painel.store.getState().queue[0]).toMatchObject({
+      videoId: 'dQw4w9WgXcQ',
+    })
   })
 
   it('recusa o que não é link de vídeo, com a frase na tela', async () => {

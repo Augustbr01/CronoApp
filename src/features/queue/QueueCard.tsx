@@ -88,7 +88,7 @@ export function QueueCard({
           <div className="queue-name-row">
             <b>{item.name}</b>
             {active && <em>NO AR</em>}
-            {item.embedBlocked && (
+            {item.kind === 'youtube' && item.embedBlocked && (
               <em
                 className="blocked"
                 title="Este vídeo não toca fora do YouTube"

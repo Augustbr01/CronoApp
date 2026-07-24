@@ -65,6 +65,7 @@ export function SearchTab({ onAdded }: SearchTabProps) {
         emptyHint="Digite o nome de uma música e busque"
         onAdd={(result) => {
           addToQueue({
+            kind: 'youtube',
             name: singer.trim(),
             videoId: result.videoId,
             title: result.title,

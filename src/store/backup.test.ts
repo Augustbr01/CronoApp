@@ -21,6 +21,7 @@ const estadoExemplo: PersistedState = {
     {
       id: 'q1',
       name: 'Ana',
+      kind: 'youtube',
       videoId: 'v1',
       title: 'Ana canta',
       addedAt: 1_700_000_000_000,
@@ -39,6 +40,7 @@ const estadoExemplo: PersistedState = {
   backgrounds: [
     {
       id: 'bg1',
+      kind: 'youtube',
       videoId: 'bgv',
       title: 'Piano worship',
       addedAt: 1_700_000_000_000,
@@ -80,8 +82,12 @@ describe('a volta completa', () => {
   it('leva o culto para outro notebook', () => {
     const { storage } = createMemoryStorage()
     const origem = createCronoStore({ storage, legacyStorage: null })
-    origem.getState().addToQueue({ name: 'Ana', videoId: 'v1', title: 'Ana' })
-    origem.getState().addBackground({ videoId: 'bg', title: 'Piano' })
+    origem
+      .getState()
+      .addToQueue({ kind: 'youtube', name: 'Ana', videoId: 'v1', title: 'Ana' })
+    origem
+      .getState()
+      .addBackground({ kind: 'youtube', videoId: 'bg', title: 'Piano' })
     origem.getState().setBackgroundFader(30)
     origem.getState().setAccent('#1fce6d')
 
@@ -104,7 +110,7 @@ describe('a volta completa', () => {
     const store = createCronoStore({ storage, legacyStorage: null })
     const ana = store
       .getState()
-      .addToQueue({ name: 'Ana', videoId: 'v1', title: 'Ana' })
+      .addToQueue({ kind: 'youtube', name: 'Ana', videoId: 'v1', title: 'Ana' })
     store.getState().play(ana)
     expect(store.getState().mode).toBe('main')
 

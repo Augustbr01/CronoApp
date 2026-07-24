@@ -66,7 +66,7 @@ export function Topbar({ onOpenSettings }: TopbarProps) {
   const subtitulo = isMain
     ? `Playback da fila · ${formatTime(elapsed)} / ${formatDuration(current?.durationSec)}`
     : isBackground
-      ? `Fundo musical · deck A · ${background?.channelTitle ?? 'YouTube'}`
+      ? `Fundo musical · deck A · ${(background?.kind === 'youtube' ? background.channelTitle : undefined) ?? 'YouTube'}`
       : isPaused
         ? 'Pausado · aperte play ou Espaço para continuar'
         : backgrounds.length

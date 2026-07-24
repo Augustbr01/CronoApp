@@ -46,11 +46,17 @@ afterEach(() => {
 })
 
 function enfileirar(name: string, videoId: string): string {
-  return store.getState().addToQueue({ name, videoId, title: `${name} canta` })
+  return store
+    .getState()
+    .addToQueue({ kind: 'youtube', name, videoId, title: `${name} canta` })
 }
 
 function comFundo(videoId = 'bg-1'): string {
-  return engine.addBackground({ videoId, title: 'Piano worship' })
+  return engine.addBackground({
+    kind: 'youtube',
+    videoId,
+    title: 'Piano worship',
+  })
 }
 
 describe('tocar um item da fila', () => {
@@ -235,7 +241,7 @@ describe('o fundo (RF-03)', () => {
 
   it('"Mix agora" desce a faixa atual antes de trocar (RF-03.5)', () => {
     comFundo('bg-1')
-    engine.addBackground({ videoId: 'bg-2', title: 'Pads' })
+    engine.addBackground({ kind: 'youtube', videoId: 'bg-2', title: 'Pads' })
     clock.advance(FADE_MS)
     const antes = players.background().videos.length
 
@@ -249,7 +255,7 @@ describe('o fundo (RF-03)', () => {
 
   it('o "Mix agora" chega ao player como um comando só, e o deck B toca', () => {
     comFundo('bg-1')
-    engine.addBackground({ videoId: 'bg-2', title: 'Pads' })
+    engine.addBackground({ kind: 'youtube', videoId: 'bg-2', title: 'Pads' })
     clock.advance(FADE_MS)
 
     engine.nextBackground()
@@ -314,13 +320,17 @@ describe('o fundo (RF-03)', () => {
 
   it('trocar de faixa fora do ar não liga o som sozinho', () => {
     comFundo('bg-1')
-    engine.addBackground({ videoId: 'bg-2', title: 'Pads' })
+    engine.addBackground({ kind: 'youtube', videoId: 'bg-2', title: 'Pads' })
     engine.toggleBackground()
     clock.advance(FADE_MS)
     const antes = players.background().commands.length
 
     engine.selectBackground(
-      store.getState().backgrounds.filter((b) => b.videoId === 'bg-2')[0].id,
+      store
+        .getState()
+        .backgrounds.filter(
+          (b) => b.kind === 'youtube' && b.videoId === 'bg-2',
+        )[0].id,
     )
     clock.advance(FADE_MS)
 

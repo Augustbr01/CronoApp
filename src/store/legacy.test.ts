@@ -78,16 +78,15 @@ describe('tradução do schema v4 (C4)', () => {
       durationSec: 254,
     })
     // O segundo veio de um link curto, com parâmetro de rastreio grudado.
-    expect(state.queue[1]?.videoId).toBe('kXYiU_JCYtU')
+    expect(state.queue[1]).toMatchObject({ videoId: 'kXYiU_JCYtU' })
   })
 
   it('o `id` do fundo no protótipo É o id do vídeo', () => {
     const state = resgatar(PAYLOAD_V4.state)
 
-    expect(state.backgrounds.map((b) => b.videoId)).toEqual([
-      'M7lc1UVf-VE',
-      '9bZkp7q19f0',
-    ])
+    expect(
+      state.backgrounds.map((b) => (b.kind === 'youtube' ? b.videoId : null)),
+    ).toEqual(['M7lc1UVf-VE', '9bZkp7q19f0'])
     // …e a faixa ganha identidade própria na biblioteca, separada do vídeo.
     expect(state.backgrounds[0]?.id).not.toBe('M7lc1UVf-VE')
     expect(state.backgrounds.map((b) => b.title)).toEqual([

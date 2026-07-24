@@ -84,6 +84,7 @@ export function BackgroundsTab() {
         emptyHint="Digite o nome de um fundo e busque"
         onAdd={(result) =>
           engine.addBackground({
+            kind: 'youtube',
             videoId: result.videoId,
             title: result.title,
             channelTitle: result.channelTitle || undefined,
@@ -118,8 +119,10 @@ export function BackgroundsTab() {
                 <span>
                   <b>{track.title}</b>
                   <small>
-                    {track.channelTitle ?? 'YouTube'} ·{' '}
-                    {formatDuration(track.durationSec)}
+                    {(track.kind === 'youtube'
+                      ? track.channelTitle
+                      : undefined) ?? 'YouTube'}{' '}
+                    · {formatDuration(track.durationSec)}
                   </small>
                 </span>
                 {track.id === selectedBackgroundId && (

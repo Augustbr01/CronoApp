@@ -49,7 +49,9 @@ export const createHistorySlice: StateCreator<
       id: createId('h'),
       name: item.name,
       title: item.title,
-      videoId: item.videoId,
+      // O histórico é só nome/título/horário; um item local não tem vídeo, e o
+      // campo (mantido por compatibilidade) fica vazio.
+      videoId: item.kind === 'youtube' ? item.videoId : '',
       finishedAt: Date.now(),
       sessionId: get().sessionId,
     }

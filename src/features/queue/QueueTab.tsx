@@ -63,6 +63,7 @@ export function QueueTab() {
     // O item entra na hora, com o rótulo genérico. Esperar a rede aqui faria o
     // operador olhar para um formulário parado achando que o clique não pegou.
     const id = addToQueue({
+      kind: 'youtube',
       name: name.trim(),
       videoId,
       title: 'Vídeo do YouTube',

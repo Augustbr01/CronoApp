@@ -8,6 +8,7 @@ import { createYouTubeChannel } from '../../youtube/player'
 import type { CreatePlayerOptions, MediaChannel } from '../../youtube/player'
 import { PLAYER_STATE } from '../../youtube/types'
 import type { CronoStore } from '../../store'
+import type { Background, QueueItem } from '../../store/types'
 import type { NewBackground } from '../../store/slices/backgrounds'
 
 /**
@@ -486,8 +487,10 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
   const ensureBackgroundLoaded = (): void => {
     const track = state().selectedBackground()
     if (!track) return
-    if (loaded.background === track.videoId) return
-    engatilhar('background', track.videoId)
+    const videoId = youtubeId(track)
+    if (videoId === null) return
+    if (loaded.background === videoId) return
+    engatilhar('background', videoId)
   }
 
   // --- o tempo ------------------------------------------------------------
@@ -540,6 +543,10 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
   const playQueueItem = (id: string): void => {
     const item = state().findQueueItem(id)
     if (!item) return
+    // Ponte da Etapa 2: só YouTube toca por ora (ver `youtubeId`). O roteamento
+    // do áudio local é da Etapa 4; nenhum item local existe até a Etapa 5.
+    const videoId = youtubeId(item)
+    if (videoId === null) return
     const { mode, currentId } = state()
 
     publish({ error: null })
@@ -552,14 +559,14 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
       // (RF-04.4) — o operador nunca ouve corte seco.
       mixer.swap('main', () => {
         state().play(id)
-        load('main', item.videoId)
+        load('main', videoId)
         publish({ elapsedSec: 0 })
       })
       return
     }
 
     state().play(id)
-    load('main', item.videoId)
+    load('main', videoId)
     publish({ elapsedSec: 0 })
     // Com o fundo tocando isto vira crossfade: ele desce enquanto o louvor
     // sobe, sem corte (RF-04.5).
@@ -583,7 +590,9 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
     state().nextBackground()
     const track = state().selectedBackground()
     if (!track) return
-    engatilhar('background', track.videoId)
+    const videoId = youtubeId(track)
+    if (videoId === null) return
+    engatilhar('background', videoId)
     publish({ backgroundElapsedSec: 0 })
     // A faixa anterior terminou em silêncio; não há o que abaixar, só o que
     // subir. É o `restart` que manda o transporte tocar a faixa engatilhada.
@@ -646,7 +655,8 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
     const trocar = (): void => {
       state().nextBackground()
       const track = state().selectedBackground()
-      if (track) engatilhar('background', track.videoId)
+      const videoId = track && youtubeId(track)
+      if (videoId) engatilhar('background', videoId)
       publish({ backgroundElapsedSec: 0 })
     }
 
@@ -662,7 +672,8 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
     const trocar = (): void => {
       state().selectBackground(id)
       const track = state().selectedBackground()
-      if (track) engatilhar('background', track.videoId)
+      const videoId = track && youtubeId(track)
+      if (videoId) engatilhar('background', videoId)
       publish({ backgroundElapsedSec: 0 })
     }
 
@@ -785,7 +796,8 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
         publishFromMixer()
         return
       }
-      engatilhar('background', track.videoId)
+      const videoId = youtubeId(track)
+      if (videoId !== null) engatilhar('background', videoId)
       if (state().mode === 'background') mixer.restart('background')
     },
 
@@ -839,6 +851,19 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
       listeners.clear()
     },
   }
+}
+
+/**
+ * O id do vídeo de um item — ou `null` se ele for áudio local (RF-11).
+ *
+ * **Ponte da Etapa 2.** O engine ainda só sabe falar com o iframe do YouTube;
+ * o roteamento por `kind` — dois backends por canal, object URL para o arquivo
+ * local — chega na Etapa 4, e é ela que troca este helper por um `toMediaRef`
+ * de verdade. Até lá um item local simplesmente não é carregado, e nenhum
+ * existe: a importação é da Etapa 5.
+ */
+function youtubeId(media: QueueItem | Background): string | null {
+  return media.kind === 'youtube' ? media.videoId : null
 }
 
 function toFadeSnapshot(
