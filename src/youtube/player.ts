@@ -57,8 +57,17 @@ export interface CreatePlayerOptions {
   playerVars?: PlayerVars
 }
 
-/** Um canal de áudio do CronoApp — louvor ou fundo — em cima de um player. */
-export interface YouTubeChannel {
+/**
+ * Um canal de áudio do CronoApp — louvor ou fundo.
+ *
+ * É o **contrato genérico** de reprodução: o motor (`engine.ts`) fala só com
+ * ele, sem saber se por baixo há um iframe do YouTube ou um `<audio>` tocando um
+ * arquivo local. O `createYouTubeChannel` abaixo é a implementação do YouTube; a
+ * do áudio local (`src/localaudio/`) implementa a mesma interface. Cada backend
+ * interpreta o `id` do `load`/`cue` à sua maneira — para o YouTube é o `videoId`;
+ * para o local, uma object URL já criada.
+ */
+export interface MediaChannel {
   /** Carrega e já começa a tocar. Arma o cronômetro. */
   load(videoId: string, startSeconds?: number): void
   /** Carrega sem tocar (deixa engatilhado). Não arma o cronômetro. */
@@ -84,7 +93,7 @@ export interface YouTubeChannel {
  */
 export async function createYouTubeChannel(
   options: CreatePlayerOptions,
-): Promise<YouTubeChannel> {
+): Promise<MediaChannel> {
   const {
     host,
     videoId,

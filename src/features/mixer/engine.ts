@@ -5,7 +5,7 @@ import type { FadeDirection } from '../../audio/fade'
 import type { FrameScheduler } from '../../audio/scheduler'
 import { snapToMute } from '../../audio/volume'
 import { createYouTubeChannel } from '../../youtube/player'
-import type { CreatePlayerOptions, YouTubeChannel } from '../../youtube/player'
+import type { CreatePlayerOptions, MediaChannel } from '../../youtube/player'
 import { PLAYER_STATE } from '../../youtube/types'
 import type { CronoStore } from '../../store'
 import type { NewBackground } from '../../store/slices/backgrounds'
@@ -97,7 +97,7 @@ export interface AudioEngineOptions {
   createChannel?: (
     options: CreatePlayerOptions,
     channel: ChannelName,
-  ) => Promise<YouTubeChannel>
+  ) => Promise<MediaChannel>
   pollMs?: number
 }
 
@@ -166,7 +166,7 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
   let snapshot: EngineSnapshot = EMPTY_SNAPSHOT
   let destroyed = false
 
-  const players: Record<ChannelName, YouTubeChannel | null> = {
+  const players: Record<ChannelName, MediaChannel | null> = {
     main: null,
     background: null,
   }

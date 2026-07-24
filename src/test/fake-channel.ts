@@ -1,20 +1,20 @@
 import { PLAYER_ERROR, describePlayerError } from '../youtube/errors'
 import { PLAYER_STATE } from '../youtube/types'
 import type { PlayerStateCode } from '../youtube/types'
-import type { CreatePlayerOptions, YouTubeChannel } from '../youtube/player'
+import type { CreatePlayerOptions, MediaChannel } from '../youtube/player'
 
 /**
  * Um canal do YouTube de mentira, no nível do **wrapper** — não da IFrame API.
  *
  * O dublê de `fake-youtube.ts` finge ser o `window.YT`; este finge ser o
- * `YouTubeChannel` que a Parte 2.4 devolve. É o degrau certo para testar a
+ * `MediaChannel` que a Parte 2.4 devolve. É o degrau certo para testar a
  * costura da Etapa 4: o que interessa é "o motor mandou carregar o vídeo X e
  * pôs o volume em 0,42", não como o iframe faz isso.
  *
  * O tempo é do teste: nada acontece sozinho. O vídeo só "acaba" quando o teste
  * chama `emitEnded()`, e o erro só aparece quando ele chama `emitError()`.
  */
-export class FakeYouTubeChannel implements YouTubeChannel {
+export class FakeYouTubeChannel implements MediaChannel {
   /** O que mandaram carregar **já tocando**, na ordem. */
   readonly loads: string[] = []
   /** O que mandaram apenas engatilhar, na ordem. */
@@ -148,7 +148,7 @@ export interface FakeChannelFactory {
   create: (
     options: CreatePlayerOptions,
     channel: 'main' | 'background',
-  ) => Promise<YouTubeChannel>
+  ) => Promise<MediaChannel>
   channels: FakeYouTubeChannel[]
   /** O player da pré-escuta — o mais recente, se houve nova tentativa. */
   main(): FakeYouTubeChannel

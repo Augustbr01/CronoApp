@@ -4,7 +4,7 @@ import {
   createYouTubeChannel,
   toYouTubeVolume,
 } from './player'
-import type { YouTubeChannel } from './player'
+import type { MediaChannel } from './player'
 import { PLAYER_STATE } from './types'
 import type { PlayerErrorInfo } from './errors'
 import { createFakeYouTubeApi } from '../test/fake-youtube'
@@ -37,7 +37,7 @@ afterEach(() => {
  * o player existir, então esperamos o construtor rodar antes de disparar.
  */
 async function createReadyChannel(): Promise<{
-  channel: YouTubeChannel
+  channel: MediaChannel
   player: FakeYouTubePlayer
 }> {
   const creating = createYouTubeChannel({
