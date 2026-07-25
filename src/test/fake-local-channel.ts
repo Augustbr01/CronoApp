@@ -123,6 +123,17 @@ export class FakeLocalChannel implements MediaChannel {
   emitEnded(): void {
     this.emitState(PLAYER_STATE.ENDED)
   }
+
+  /**
+   * O elemento reportou uma falha — decode, codec, arquivo sumido.
+   *
+   * Passa pelo `describeLocalError` de verdade, e não por uma mensagem inventada
+   * no teste: assim o que a tela mostra no teste é exatamente o que ela mostraria
+   * no culto.
+   */
+  emitError(code: number): void {
+    this.options.onError?.(describeLocalError(code))
+  }
 }
 
 export interface FakeLocalChannelFactory {
