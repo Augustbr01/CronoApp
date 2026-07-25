@@ -9,9 +9,13 @@ import type { CreatePlayerOptions, MediaChannel } from '../../youtube/player'
 import { PLAYER_STATE } from '../../youtube/types'
 import { createLocalAudioChannel } from '../../localaudio/player'
 import type { CreateLocalChannelOptions } from '../../localaudio/player'
+<<<<<<< HEAD
 import { blobVault } from '../../store/blob-storage'
 import type { BlobVault } from '../../store/blob-storage'
 import { createId } from '../../store/ids'
+=======
+import { getBlob } from '../../store/blob-storage'
+>>>>>>> e9321cfe4afd447da4e6dfa068a00f17fe17d6e7
 import type { CronoStore } from '../../store'
 import type { Background, MediaKind, QueueItem } from '../../store/types'
 import type { NewBackground } from '../../store/slices/backgrounds'
@@ -139,11 +143,21 @@ const EMPTY_SNAPSHOT: EngineSnapshot = {
 /** De quanto em quanto tempo se pergunta ao player onde ele está. */
 export const POLL_MS = 250
 
+<<<<<<< HEAD
+=======
+/** Resolve o `blobId` de um item local nos bytes → object URL, em produção. */
+async function defaultResolveBlobUrl(blobId: string): Promise<string | null> {
+  const blob = await getBlob(blobId)
+  return blob ? URL.createObjectURL(blob) : null
+}
+
+>>>>>>> e9321cfe4afd447da4e6dfa068a00f17fe17d6e7
 /** Revoga uma object URL de áudio local em produção (RNF-04.2). */
 function defaultRevokeBlobUrl(url: string): void {
   URL.revokeObjectURL(url)
 }
 
+<<<<<<< HEAD
 /**
  * O que impede um arquivo escolhido de virar item — ou `null` se ele serve.
  *
@@ -184,6 +198,8 @@ function describeStorageError(error: unknown, fileName: string): string {
   return `Não foi possível guardar "${fileName}" no dispositivo.`
 }
 
+=======
+>>>>>>> e9321cfe4afd447da4e6dfa068a00f17fe17d6e7
 export interface AudioEngineOptions {
   store: CronoStore
   /** O relógio do motor. Trocado nos testes. */
@@ -210,11 +226,14 @@ export interface AudioEngineOptions {
     channel: ChannelName,
   ) => MediaChannel
   /**
+<<<<<<< HEAD
    * Onde os bytes dos áudios importados moram. Trocado nos testes por um cofre
    * de memória, para nenhum teste de costura precisar de IndexedDB.
    */
   blobs?: BlobVault
   /**
+=======
+>>>>>>> e9321cfe4afd447da4e6dfa068a00f17fe17d6e7
    * Resolve o `blobId` de um item local nos bytes → object URL que o `<audio>`
    * toca, ou `null` se o blob sumiu do cofre. Quem faz isso é a **costura**, não
    * o backend local (RNF-04.2): o motor é o único que fala com o store. Trocado
@@ -310,6 +329,7 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
     scheduler,
     createChannel = createYouTubeChannel,
     createLocalChannel = createLocalAudioChannel,
+<<<<<<< HEAD
     blobs = blobVault,
     // Derivado do cofre de propósito: trocar `blobs` num teste já troca a
     // resolução inteira, e sobra só o `URL.createObjectURL` — que é browser, não
@@ -318,6 +338,9 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
       const blob = await blobs.get(blobId)
       return blob ? URL.createObjectURL(blob) : null
     },
+=======
+    resolveBlobUrl = defaultResolveBlobUrl,
+>>>>>>> e9321cfe4afd447da4e6dfa068a00f17fe17d6e7
     revokeBlobUrl = defaultRevokeBlobUrl,
     pollMs = POLL_MS,
   } = options
@@ -448,12 +471,15 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
   const activeBackend = (channel: ChannelName): MediaChannel | null =>
     backendFor(channel, active[channel])
 
+<<<<<<< HEAD
   /**
    * Conta à tela quem é a voz do louvor. Chamado a cada mudança de `active`,
    * porque é ela — e não o item da fila — que a pré-escuta precisa seguir.
    */
   const publicarVozDoLouvor = (): void => publish({ mainKind: active.main })
 
+=======
+>>>>>>> e9321cfe4afd447da4e6dfa068a00f17fe17d6e7
   // --- o observável -------------------------------------------------------
 
   const publish = (patch: Partial<EngineSnapshot>): void => {
@@ -541,7 +567,10 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
       cued[channel] = null
       pendingLoad[channel] = null
       active[channel] = null
+<<<<<<< HEAD
       publicarVozDoLouvor()
+=======
+>>>>>>> e9321cfe4afd447da4e6dfa068a00f17fe17d6e7
     }
   }
 
@@ -707,6 +736,7 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
    * o arquivo sumiu (RF-11.5/6). Assíncrono; o `token` garante que uma resolução
    * ultrapassada por um pedido mais novo se descarte sem tocar nada.
    */
+<<<<<<< HEAD
   /**
    * A resolução do blob, blindada.
    *
@@ -725,12 +755,18 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
     }
   }
 
+=======
+>>>>>>> e9321cfe4afd447da4e6dfa068a00f17fe17d6e7
   const resolveLocal = async (
     channel: ChannelName,
     ref: LocalRef,
     token: number,
   ): Promise<void> => {
+<<<<<<< HEAD
     const url = await resolverUrl(ref.blobId)
+=======
+    const url = await resolveBlobUrl(ref.blobId)
+>>>>>>> e9321cfe4afd447da4e6dfa068a00f17fe17d6e7
 
     if (destroyed || loadToken[channel] !== token) {
       // Pedido ultrapassado (troca/remoção de faixa) ou motor desmontado: a URL
@@ -747,6 +783,7 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
       // Blob ausente: o backend local traduz num erro visível (NO_SOURCE), sem
       // som, reaproveitando o caminho de erro que a tela já sabe mostrar.
       local[channel]?.load('')
+<<<<<<< HEAD
       // E o canal fica **sem voz**. Sem isto, o `<audio>` continuaria com o
       // `src` da faixa anterior no elemento (o `load('')` recusa a troca sem
       // arquivo), e o próximo play do mixer tocaria a faixa velha com a tela
@@ -756,6 +793,8 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
       loaded[channel] = null
       active[channel] = null
       publicarVozDoLouvor()
+=======
+>>>>>>> e9321cfe4afd447da4e6dfa068a00f17fe17d6e7
       return
     }
 
@@ -780,11 +819,27 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
   }
 
   /**
+<<<<<<< HEAD
    * Invalida qualquer resolução de blob em voo no canal — a troca ou a remoção
    * de faixa que não deve deixar uma resolução velha tocar depois.
    */
   const invalidateLocalLoad = (channel: ChannelName): void => {
     loadToken[channel] += 1
+=======
+   * Cancela a carga pendente de um canal — o "não toque mais nada" de uma parada
+   * ou remoção. Faz duas coisas que precisam andar juntas:
+   *
+   * - Sobe o `loadToken`, para uma resolução de blob em voo se descartar em vez
+   *   de tocar uma faixa que já não é para tocar.
+   * - Zera o `pendingLoad`. Sem isto, um pedido órfão ficaria pendurado, e como o
+   *   `onTransport` trata "há `pendingLoad`" como "backend ainda não pronto", ele
+   *   passaria a **engolir todo play/pause** do canal — o vídeo do YouTube nunca
+   *   pausaria, só ficaria mudo enquanto continua tocando por baixo.
+   */
+  const cancelLoad = (channel: ChannelName): void => {
+    loadToken[channel] += 1
+    pendingLoad[channel] = null
+>>>>>>> e9321cfe4afd447da4e6dfa068a00f17fe17d6e7
   }
 
   /**
@@ -802,19 +857,35 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
   ): void => {
     loaded[channel] = refKey(ref)
     const token = (loadToken[channel] += 1)
+<<<<<<< HEAD
     // A mídia engatilhada acabou de ser substituída, seja qual for o backend.
     // Zerar aqui, e não só nos ramos que a reescrevem, é o que impede um
     // engatilhado velho de sobreviver a uma carga que não chegou ao fim — e de
     // entrar no ar no lugar da faixa que a tela está mostrando.
     cued[channel] = null
+=======
+    // Este pedido supera qualquer anterior: nasce sem carga pendente, e cada
+    // ramo abaixo a re-arma só se de fato ficar algo em voo. Sem isto, um
+    // `pendingLoad` velho sobreviveria a um `put` de YouTube pronto e engoliria
+    // o transporte do canal (ver `cancelLoad`).
+    pendingLoad[channel] = null
+>>>>>>> e9321cfe4afd447da4e6dfa068a00f17fe17d6e7
 
     // Trocar o backend ativo do canal (YouTube ↔ local): silencia o anterior e
     // leva o novo ao volume de agora, para ele não entrar num salto.
     if (active[channel] !== ref.kind) {
       backendFor(channel, active[channel])?.pause()
+<<<<<<< HEAD
       active[channel] = ref.kind
       backendFor(channel, ref.kind)?.setVolume(mixer.getVolume(channel))
       publicarVozDoLouvor()
+=======
+      // Saindo do local: a object URL da faixa que perde a voz não serve mais —
+      // revoga já, sem esperar o `destroy` (RNF-04.2).
+      if (active[channel] === 'local') revokeLocalUrl(channel)
+      active[channel] = ref.kind
+      backendFor(channel, ref.kind)?.setVolume(mixer.getVolume(channel))
+>>>>>>> e9321cfe4afd447da4e6dfa068a00f17fe17d6e7
     }
 
     if (ref.kind === 'youtube') {
@@ -1010,6 +1081,9 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
    */
   const stopMain = (): void => {
     if (state().currentId === null) return
+    // Se um item local ainda estava resolvendo o blob, ele não pode entrar
+    // tocando durante a saída: cancela a carga pendente antes de mandar parar.
+    cancelLoad('main')
     // A faixa de fundo precisa estar carregada **antes**: quando a rampa
     // terminar, ela entra no mesmo instante.
     ensureBackgroundLoaded()
@@ -1040,6 +1114,9 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
   }
 
   const stopBackground = (): void => {
+    // Mesma razão do `stopMain`: um fundo local a meio de resolver não deve
+    // entrar tocando durante a saída.
+    cancelLoad('background')
     mixer.stopBackground(() => state().stopBackground())
     publishFromMixer()
   }
@@ -1410,6 +1487,7 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
       if (!track) {
         // Biblioteca vazia: o fundo cai. Invalida uma resolução de blob em voo
         // (não vá ela tocar um fundo que não existe mais) e revoga a URL atual.
+<<<<<<< HEAD
         //
         // `active` **não** é zerado aqui: o backend continua sendo a voz do
         // canal até a rampa acabar, e é ela que leva o volume dele a zero de
@@ -1417,6 +1495,12 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
         // pausado guardando o último volume — pronto para estourar no ar se
         // alguma coisa o religasse.
         invalidateLocalLoad('background')
+=======
+        // `active` permanece apontando para o backend até a rampa terminar: é
+        // por ele que o `stopBackground` leva o volume a zero — zerá-lo agora
+        // congelaria o som no volume atual, sem por onde descer.
+        cancelLoad('background')
+>>>>>>> e9321cfe4afd447da4e6dfa068a00f17fe17d6e7
         activeBackend('background')?.pause()
         revokeLocalUrl('background')
         loaded.background = null
@@ -1434,6 +1518,7 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
       const removido = state().findQueueItem(id)
       state().removeFromQueue(id)
       // Tirar da fila quem está no ar tira do ar também — e o som tem que
+<<<<<<< HEAD
       // acompanhar a tela. Invalida uma resolução de blob em voo para o item
       // removido não começar a tocar durante a saída.
       if (eraOAtual) {
@@ -1447,6 +1532,14 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
         })
       }
       if (removido?.kind === 'local') descartarSeOrfao(removido.blobId)
+=======
+      // acompanhar a tela. Cancela a carga pendente para o item removido não
+      // começar a tocar durante a saída (e o transporte não ficar engolido).
+      if (eraOAtual) {
+        cancelLoad('main')
+        mixer.stopMain()
+      }
+>>>>>>> e9321cfe4afd447da4e6dfa068a00f17fe17d6e7
       publishFromMixer()
     },
 
