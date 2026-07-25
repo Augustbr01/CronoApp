@@ -2,8 +2,16 @@ import { createAudioEngine } from './engine'
 import type { AudioEngine } from './engine'
 import { createCronoStore } from '../../store'
 import type { CronoStore } from '../../store'
-import { createFakeChannelFactory } from '../../test/fake-channel'
-import type { FakeChannelFactory } from '../../test/fake-channel'
+import {
+  createFakeBlobUrls,
+  createFakeChannelFactory,
+  createFakeLocalFactory,
+} from '../../test/fake-channel'
+import type {
+  FakeBlobUrls,
+  FakeChannelFactory,
+  FakeLocalFactory,
+} from '../../test/fake-channel'
 import { createFakeScheduler } from '../../test/fake-scheduler'
 import type { FakeScheduler } from '../../test/fake-scheduler'
 import { createMemoryStorage } from '../../test/memory-storage'
@@ -20,6 +28,8 @@ const FADE_MS = 2000
 
 let store: CronoStore
 let players: FakeChannelFactory
+let locals: FakeLocalFactory
+let blobs: FakeBlobUrls
 let clock: FakeScheduler
 let engine: AudioEngine
 
@@ -27,11 +37,16 @@ beforeEach(async () => {
   const { storage } = createMemoryStorage()
   store = createCronoStore({ storage, legacyStorage: null })
   players = createFakeChannelFactory()
+  locals = createFakeLocalFactory()
+  blobs = createFakeBlobUrls()
   clock = createFakeScheduler()
   engine = createAudioEngine({
     store,
     scheduler: clock,
     createChannel: players.create,
+    createLocalChannel: locals.create,
+    resolveBlobUrl: blobs.resolve,
+    revokeBlobUrl: blobs.revoke,
   })
 
   engine.attachMain(document.createElement('div'))
@@ -45,10 +60,30 @@ afterEach(() => {
   engine.destroy()
 })
 
+/**
+ * A resolução do blob de um item local é assíncrona (`resolveBlobUrl`). Depois de
+ * disparar um caminho que carrega áudio local, esvaziamos a fila de microtarefas
+ * para a URL chegar ao backend antes de avançar o relógio.
+ */
+async function flush(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
 function enfileirar(name: string, videoId: string): string {
   return store
     .getState()
     .addToQueue({ kind: 'youtube', name, videoId, title: `${name} canta` })
+}
+
+function enfileirarLocal(name: string, blobId: string): string {
+  return store.getState().addToQueue({
+    kind: 'local',
+    name,
+    blobId,
+    fileName: `${blobId}.mp3`,
+    title: `${blobId}.mp3`,
+  })
 }
 
 function comFundo(videoId = 'bg-1'): string {
@@ -56,6 +91,15 @@ function comFundo(videoId = 'bg-1'): string {
     kind: 'youtube',
     videoId,
     title: 'Piano worship',
+  })
+}
+
+function comFundoLocal(blobId = 'bg-local'): string {
+  return engine.addBackground({
+    kind: 'local',
+    blobId,
+    fileName: `${blobId}.mp3`,
+    title: `${blobId}.mp3`,
   })
 }
 
@@ -604,5 +648,258 @@ describe('o fader gravado no disco tem que chegar ao som', () => {
     clock.advance(FADE_MS * 2)
 
     expect(players.main().volume).toBeCloseTo(0.55, 2)
+  })
+})
+
+describe('áudio local na fila (RF-11)', () => {
+  it('toca pelo backend local, não pelo iframe, e sobe com fade (RF-11.4)', async () => {
+    const ana = enfileirarLocal('Ana', 'blob-ana')
+
+    engine.playQueueItem(ana)
+    // A URL do blob chega numa microtarefa; sem ela o backend não recebeu nada.
+    await flush()
+
+    expect(locals.main().loads).toEqual([blobs.urlFor('blob-ana')])
+    // O iframe do louvor não recebeu nada: quem toca é o `<audio>`.
+    expect(players.main().loads).toEqual([])
+    expect(locals.main().volume).toBe(0)
+
+    clock.advance(FADE_MS)
+    expect(locals.main().volume).toBeCloseTo(0.8, 2)
+    expect(store.getState().mode).toBe('main')
+  })
+
+  it('a música local acaba sozinha, entra no histórico e o fundo volta', async () => {
+    comFundo('bg-1')
+    const ana = enfileirarLocal('Ana', 'blob-ana')
+    engine.playQueueItem(ana)
+    await flush()
+    clock.advance(FADE_MS)
+
+    locals.main().emitEnded()
+    clock.advance(FADE_MS)
+
+    expect(store.getState().queue).toHaveLength(0)
+    expect(store.getState().history.map((h) => h.name)).toEqual(['Ana'])
+    // O histórico guarda o item local sem vídeo — o campo fica vazio.
+    expect(store.getState().history[0]?.videoId).toBe('')
+    expect(store.getState().mode).toBe('background')
+    expect(players.background().volume).toBeCloseTo(0.4, 2)
+  })
+
+  it('o blob que sumiu do cofre vira erro visível, não silêncio (RF-11.6)', async () => {
+    blobs.markMissing('blob-ana')
+    const ana = enfileirarLocal('Ana', 'blob-ana')
+
+    engine.playQueueItem(ana)
+    await flush()
+
+    expect(engine.getSnapshot().error).toMatch(/não encontrado/i)
+    // Não tocou nada: sem arquivo, não há o que tocar.
+    expect(locals.main().loads).toEqual([''])
+  })
+
+  it('o erro do fundo local diz que é do fundo', async () => {
+    comFundoLocal('bg-local')
+    await flush()
+
+    locals.background().emitError(-1, 'Arquivo de áudio não encontrado.')
+
+    expect(engine.getSnapshot().error).toBe(
+      'Fundo: Arquivo de áudio não encontrado.',
+    )
+  })
+})
+
+describe('fila e fundo misturados (RF-11.4)', () => {
+  it('trocar de YouTube para local desce um e sobe o outro, pausando o iframe', async () => {
+    const ana = enfileirar('Ana', 'video-ana')
+    const bruno = enfileirarLocal('Bruno', 'blob-bruno')
+    engine.playQueueItem(ana)
+    clock.advance(FADE_MS)
+    expect(players.main().volume).toBeCloseTo(0.8, 2)
+
+    engine.playQueueItem(bruno)
+    // No meio da descida, o vídeo ainda está no ar e a fila aponta para a Ana.
+    clock.advance(FADE_MS / 2)
+    expect(store.getState().currentId).toBe(ana)
+    // O backend local nem nasceu ainda: só nasce quando a troca chega ao fundo.
+    expect(locals.channels).toHaveLength(0)
+
+    // No fundo do poço, o iframe é pausado e a faixa local entra.
+    clock.advance(FADE_MS / 2)
+    await flush()
+    expect(players.main().commands).toContain('pause')
+    expect(locals.main().loads).toEqual([blobs.urlFor('blob-bruno')])
+    expect(store.getState().currentId).toBe(bruno)
+
+    clock.advance(FADE_MS)
+    expect(locals.main().volume).toBeCloseTo(0.8, 2)
+  })
+
+  it('trocar de local para YouTube faz o inverso, pausando o `<audio>`', async () => {
+    const ana = enfileirarLocal('Ana', 'blob-ana')
+    const bruno = enfileirar('Bruno', 'video-bruno')
+    engine.playQueueItem(ana)
+    await flush()
+    clock.advance(FADE_MS)
+    expect(locals.main().volume).toBeCloseTo(0.8, 2)
+
+    engine.playQueueItem(bruno)
+    clock.advance(FADE_MS)
+    // No fundo do poço o `<audio>` é pausado e o vídeo entra pelo iframe.
+    expect(locals.main().commands).toContain('pause')
+    expect(players.main().loads).toEqual(['video-bruno'])
+
+    clock.advance(FADE_MS)
+    expect(players.main().volume).toBeCloseTo(0.8, 2)
+  })
+
+  it('crossfade misto: louvor local sobe enquanto o fundo do YouTube desce (RF-04.5)', async () => {
+    comFundo('bg-1')
+    const ana = enfileirarLocal('Ana', 'blob-ana')
+    clock.advance(FADE_MS)
+    expect(players.background().volume).toBeCloseTo(0.4, 2)
+
+    engine.playQueueItem(ana)
+    await flush()
+    clock.advance(FADE_MS / 2)
+
+    // Os dois soam ao mesmo tempo, em backends diferentes: o `<audio>` subindo, o
+    // iframe descendo — e o fundo continua tocando durante a descida.
+    expect(locals.main().volume).toBeGreaterThan(0)
+    expect(players.background().volume).toBeGreaterThan(0)
+    expect(players.background().volume).toBeLessThan(0.4)
+    expect(players.background().commands).not.toContain('pause')
+  })
+})
+
+describe('fundo local (RF-11.2)', () => {
+  it('a primeira faixa local da biblioteca vazia já entra tocando (RF-03.4)', async () => {
+    comFundoLocal('bg-local')
+    await flush()
+
+    expect(store.getState().mode).toBe('background')
+    expect(locals.background().loads).toEqual([blobs.urlFor('bg-local')])
+
+    clock.advance(FADE_MS)
+    expect(locals.background().volume).toBeCloseTo(0.4, 2)
+  })
+
+  it('com uma faixa local só, o fim reinicia a mesma (RF-03.6)', async () => {
+    comFundoLocal('bg-local')
+    await flush()
+    clock.advance(FADE_MS)
+
+    locals.background().emitEnded()
+    await flush()
+    clock.advance(FADE_MS)
+
+    // Entrou de novo: dois `load` da mesma URL, do começo.
+    expect(locals.background().loads).toEqual([
+      blobs.urlFor('bg-local'),
+      blobs.urlFor('bg-local'),
+    ])
+    expect(locals.background().volume).toBeCloseTo(0.4, 2)
+  })
+
+  it('mistura fontes: um fundo do YouTube e um local convivem na biblioteca', async () => {
+    comFundo('bg-1')
+    engine.addBackground({
+      kind: 'local',
+      blobId: 'bg-local',
+      fileName: 'bg-local.mp3',
+      title: 'bg-local.mp3',
+    })
+    clock.advance(FADE_MS)
+
+    // "Mix agora" troca do fundo do YouTube para o local, com fade.
+    engine.nextBackground()
+    clock.advance(FADE_MS)
+    await flush()
+    clock.advance(FADE_MS)
+
+    expect(locals.background().loads.at(-1)).toBe(blobs.urlFor('bg-local'))
+    expect(locals.background().volume).toBeCloseTo(0.4, 2)
+    // E o iframe do fundo foi silenciado ao ceder a voz do canal.
+    expect(players.background().commands).toContain('pause')
+  })
+})
+
+describe('ciclo de vida das object URLs (RNF-04.2)', () => {
+  it('trocar de faixa local revoga a URL anterior', async () => {
+    const ana = enfileirarLocal('Ana', 'blob-ana')
+    const bruno = enfileirarLocal('Bruno', 'blob-bruno')
+    engine.playQueueItem(ana)
+    await flush()
+    clock.advance(FADE_MS)
+
+    engine.playQueueItem(bruno)
+    clock.advance(FADE_MS)
+    await flush()
+
+    expect(blobs.revoked).toContain(blobs.urlFor('blob-ana'))
+  })
+
+  it('desmontar destrói os dois backends e revoga a URL local (RNF-04.2)', async () => {
+    const ana = enfileirarLocal('Ana', 'blob-ana')
+    engine.playQueueItem(ana)
+    await flush()
+    clock.advance(FADE_MS)
+
+    const iframe = players.main()
+    const audio = locals.main()
+
+    engine.destroy()
+
+    expect(iframe.destroyed).toBe(true)
+    expect(audio.destroyed).toBe(true)
+    expect(blobs.revoked).toContain(blobs.urlFor('blob-ana'))
+    expect(clock.pending()).toBe(0)
+  })
+
+  it('uma resolução ultrapassada por uma remoção não toca — e a URL não vaza', async () => {
+    const ana = enfileirarLocal('Ana', 'blob-ana')
+    // Toca e, antes de a URL chegar, remove: a resolução em voo fica órfã.
+    engine.playQueueItem(ana)
+    engine.removeFromQueue(ana)
+    await flush()
+
+    // Não tocou a faixa removida...
+    expect(locals.main().loads).toEqual([])
+    // ...e a URL que a resolução chegou a criar foi revogada, sem vazar.
+    expect(blobs.revoked).toContain(blobs.urlFor('blob-ana'))
+  })
+
+  it('a carga pendente cancelada não engole o transporte do próximo item (regressão)', async () => {
+    // O cenário do bug: remover um item local a meio de resolver deixava um
+    // `pendingLoad` órfão, e a partir daí todo play/pause do canal era engolido
+    // — o vídeo do YouTube seguinte nunca pausava, só ficava mudo tocando.
+    const ana = enfileirarLocal('Ana', 'blob-ana')
+    const bruno = enfileirar('Bruno', 'video-bruno')
+    engine.playQueueItem(ana)
+    engine.removeFromQueue(ana)
+    await flush()
+
+    engine.playQueueItem(bruno)
+    clock.advance(FADE_MS)
+    expect(players.main().volume).toBeCloseTo(0.8, 2)
+
+    // O Espaço tem que chegar ao player: pausa de verdade, não só mudo.
+    engine.togglePlayPause()
+    clock.advance(FADE_MS)
+    expect(players.main().commands).toContain('pause')
+    expect(players.main().volume).toBe(0)
+  })
+
+  it('parar cancela a resolução local em voo — a faixa parada não toca', async () => {
+    const ana = enfileirarLocal('Ana', 'blob-ana')
+    // Toca e para antes de a URL chegar: a faixa não pode entrar durante a saída.
+    engine.playQueueItem(ana)
+    engine.stopMain()
+    await flush()
+
+    expect(locals.main().loads).toEqual([])
+    expect(blobs.revoked).toContain(blobs.urlFor('blob-ana'))
   })
 })

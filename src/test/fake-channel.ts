@@ -2,6 +2,8 @@ import { PLAYER_ERROR, describePlayerError } from '../youtube/errors'
 import { PLAYER_STATE } from '../youtube/types'
 import type { PlayerStateCode } from '../youtube/types'
 import type { CreatePlayerOptions, MediaChannel } from '../youtube/player'
+import type { CreateLocalChannelOptions } from '../localaudio/player'
+import type { ChannelName } from '../audio/mixer'
 
 /**
  * Um canal do YouTube de mentira, no nível do **wrapper** — não da IFrame API.
@@ -198,5 +200,193 @@ export function createFakeChannelFactory(): FakeChannelFactory {
       falhasPendentes = quantas
       if (message !== undefined) mensagemDaFalha = message
     },
+  }
+}
+
+/**
+ * O backend de áudio local de mentira, no nível do `MediaChannel` — o irmão do
+ * `FakeYouTubeChannel` para o `<audio>`.
+ *
+ * A diferença que importa para a costura da Etapa 4: o local **não tem a corrida
+ * cue/play**. Engatilhar (`cue`) e depois `play()` simplesmente toca — o `<audio>`
+ * já apontou o `src` e não há `postMessage` para perder. Por isso, ao contrário do
+ * dublê do YouTube, o `play()` aqui nunca vira erro por faixa engatilhada.
+ *
+ * Como no dublê do YouTube, **o tempo é do teste**: a faixa só "acaba" quando o
+ * teste chama `emitEnded()`, e o erro só aparece com `emitError()`.
+ */
+export class FakeLocalChannel implements MediaChannel {
+  /** As object URLs que mandaram carregar **já tocando**, na ordem. */
+  readonly loads: string[] = []
+  /** As object URLs que mandaram apenas engatilhar, na ordem. */
+  readonly cues: string[] = []
+  readonly commands: string[] = []
+  volume = 1
+  destroyed = false
+  currentTime = 0
+  duration = 0
+
+  private state: PlayerStateCode = PLAYER_STATE.UNSTARTED
+  private readonly options: CreateLocalChannelOptions
+
+  constructor(options: CreateLocalChannelOptions) {
+    this.options = options
+  }
+
+  load(url: string): void {
+    this.loads.push(url)
+    this.commands.push(`load:${url}`)
+    this.currentTime = 0
+    // Sem arquivo (o blob sumiu): o backend real reporta NO_SOURCE e não toca.
+    if (url === '') {
+      this.options.onError?.(NO_SOURCE_ERROR)
+      return
+    }
+    this.emitState(PLAYER_STATE.PLAYING)
+  }
+
+  cue(url: string): void {
+    this.cues.push(url)
+    this.commands.push(`cue:${url}`)
+    this.currentTime = 0
+  }
+
+  /** Toda URL que passou por este backend, engatilhada ou tocando, na ordem. */
+  get urls(): string[] {
+    return this.commands
+      .filter((c) => c.startsWith('load:') || c.startsWith('cue:'))
+      .map((c) => c.slice(c.indexOf(':') + 1))
+  }
+
+  play(): void {
+    this.commands.push('play')
+    // Sem corrida: tocar depois de engatilhar simplesmente funciona.
+    this.emitState(PLAYER_STATE.PLAYING)
+  }
+
+  pause(): void {
+    this.commands.push('pause')
+    this.emitState(PLAYER_STATE.PAUSED)
+  }
+
+  stop(): void {
+    this.commands.push('stop')
+  }
+
+  setVolume(level: number): void {
+    this.volume = level
+  }
+
+  getVolume(): number {
+    return this.volume
+  }
+
+  getState(): PlayerStateCode {
+    return this.state
+  }
+
+  getCurrentTime(): number {
+    return this.currentTime
+  }
+
+  getDuration(): number {
+    return this.duration
+  }
+
+  destroy(): void {
+    this.destroyed = true
+  }
+
+  // --- gatilhos que só os testes usam ---------------------------------------
+
+  emitState(state: PlayerStateCode): void {
+    this.state = state
+    this.options.onStateChange?.(state)
+  }
+
+  /** A faixa chegou ao fim sozinha. */
+  emitEnded(): void {
+    this.emitState(PLAYER_STATE.ENDED)
+  }
+
+  emitError(code: number, message = 'arquivo ruim'): void {
+    this.options.onError?.({ code, message, fatal: false })
+  }
+}
+
+/** O erro que o backend local reporta quando mandam carregar sem arquivo. */
+const NO_SOURCE_ERROR = {
+  code: -1,
+  message: 'Arquivo de áudio não encontrado.',
+  fatal: true,
+} as const
+
+export interface FakeLocalFactory {
+  /** Entra no lugar de `createLocalAudioChannel`. */
+  create: (
+    options: CreateLocalChannelOptions,
+    channel: ChannelName,
+  ) => MediaChannel
+  channels: FakeLocalChannel[]
+  /** O backend local do louvor — nasce sob demanda, só se algum item local tocar. */
+  main(): FakeLocalChannel
+  /** O backend local do fundo. */
+  background(): FakeLocalChannel
+}
+
+/** A fábrica de backends locais que o motor recebe no lugar do real. */
+export function createFakeLocalFactory(): FakeLocalFactory {
+  const channels: FakeLocalChannel[] = []
+  const porCanal = new Map<string, FakeLocalChannel>()
+
+  const pegar = (role: string): FakeLocalChannel => {
+    const found = porCanal.get(role)
+    if (!found) throw new Error(`nenhum backend local "${role}" foi criado`)
+    return found
+  }
+
+  return {
+    create(options, channel) {
+      const fake = new FakeLocalChannel(options)
+      channels.push(fake)
+      porCanal.set(channel, fake)
+      return fake
+    },
+    channels,
+    main: () => pegar('main'),
+    background: () => pegar('background'),
+  }
+}
+
+/**
+ * O dublê da resolução de blob → object URL. Não depende do IndexedDB nem do
+ * `URL` (que o jsdom não implementa): mapeia cada `blobId` para uma URL sintética
+ * e anota o que foi revogado, para os testes conferirem que nada vaza (RNF-04.2).
+ */
+export interface FakeBlobUrls {
+  resolve: (blobId: string) => Promise<string | null>
+  revoke: (url: string) => void
+  /** As URLs revogadas, na ordem. */
+  readonly revoked: string[]
+  /** Marca um `blobId` como ausente — a resolução dele devolve `null`. */
+  markMissing: (blobId: string) => void
+  /** A URL sintética de um `blobId`, para os testes casarem com os `loads`. */
+  urlFor: (blobId: string) => string
+}
+
+export function createFakeBlobUrls(): FakeBlobUrls {
+  const revoked: string[] = []
+  const missing = new Set<string>()
+  const urlFor = (blobId: string): string => `blob:local/${blobId}`
+
+  return {
+    resolve: (blobId) =>
+      Promise.resolve(missing.has(blobId) ? null : urlFor(blobId)),
+    revoke: (url) => {
+      revoked.push(url)
+    },
+    revoked,
+    markMissing: (blobId) => missing.add(blobId),
+    urlFor,
   }
 }

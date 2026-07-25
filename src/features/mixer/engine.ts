@@ -7,12 +7,15 @@ import { snapToMute } from '../../audio/volume'
 import { createYouTubeChannel } from '../../youtube/player'
 import type { CreatePlayerOptions, MediaChannel } from '../../youtube/player'
 import { PLAYER_STATE } from '../../youtube/types'
+import { createLocalAudioChannel } from '../../localaudio/player'
+import type { CreateLocalChannelOptions } from '../../localaudio/player'
+import { getBlob } from '../../store/blob-storage'
 import type { CronoStore } from '../../store'
-import type { Background, QueueItem } from '../../store/types'
+import type { Background, MediaKind, QueueItem } from '../../store/types'
 import type { NewBackground } from '../../store/slices/backgrounds'
 
 /**
- * A costura — onde o motor da Etapa 2, o store da Etapa 3 e o YouTube se
+ * A costura — onde o motor da Etapa 2, o store da Etapa 3 e os players se
  * encontram.
  *
  * A divisão de trabalho é a mesma das etapas anteriores, e é o que impede este
@@ -23,12 +26,51 @@ import type { NewBackground } from '../../store/slices/backgrounds'
  * - **O mixer guarda som.** Rampas, crossfade, volume por quadro. Não conhece
  *   React nem store — ele **anuncia** ("o volume do fundo agora é 0,42").
  * - **O engine traduz.** Cada ação do operador vira (a) uma mudança de dados no
- *   store e (b) um comando de som no mixer. Nada mais mora aqui.
+ *   store e (b) um comando de som no player. Nada mais mora aqui.
  *
  * A UI não fala com o mixer nem com o player: ela chama uma ação daqui e lê o
  * `snapshot`. É isso que permite testar o painel inteiro com um player de
  * mentira e um relógio de mentira.
+ *
+ * **Dois backends por canal (RF-11).** Cada canal (louvor, fundo) segura um
+ * iframe do YouTube **e** um `<audio>` local ao lado (D2), e a costura roteia o
+ * volume e o transporte para o backend **ativo** conforme o `kind` do item
+ * corrente. O iframe é caro de nascer (carrega a API, arma o watchdog de 5 s),
+ * então ele fica de pé o culto inteiro; o `<audio>` é barato e nasce sob demanda
+ * — um culto só de YouTube nunca cria um. O motor de mixagem (`audio/`) não sabe
+ * de nada disso: ele fala em números 0–1 e anuncia intenções, e aqui é que
+ * viram comandos de um backend ou de outro.
  */
+
+/**
+ * A referência de mídia que o motor precisa para mandar carregar — a parte de um
+ * item da fila ou fundo que diz **o quê** tocar e **onde**.
+ *
+ * O `kind` decide para qual backend o canal roteia: `videoId` vai para o iframe
+ * do YouTube; `blobId` é resolvido nos bytes → object URL que o `<audio>` toca.
+ */
+type MediaRef =
+  { kind: 'youtube'; videoId: string } | { kind: 'local'; blobId: string }
+
+type LocalRef = Extract<MediaRef, { kind: 'local' }>
+
+/** Extrai a referência de mídia de um item da fila ou de um fundo. */
+function toMediaRef(media: QueueItem | Background): MediaRef {
+  return media.kind === 'youtube'
+    ? { kind: 'youtube', videoId: media.videoId }
+    : { kind: 'local', blobId: media.blobId }
+}
+
+/**
+ * Chave estável de uma referência, para o `loaded` saber se o backend já tem
+ * aquela mídia e não recarregar à toa. O prefixo do `kind` evita que um `blobId`
+ * e um `videoId` iguais por acaso se confundam.
+ */
+function refKey(ref: MediaRef): string {
+  return ref.kind === 'youtube'
+    ? `youtube:${ref.videoId}`
+    : `local:${ref.blobId}`
+}
 
 /** Um fade em andamento, do jeito que o aviso flutuante consome (RF-05.5). */
 export interface FadeSnapshot {
@@ -83,12 +125,23 @@ const EMPTY_SNAPSHOT: EngineSnapshot = {
 /** De quanto em quanto tempo se pergunta ao player onde ele está. */
 export const POLL_MS = 250
 
+/** Resolve o `blobId` de um item local nos bytes → object URL, em produção. */
+async function defaultResolveBlobUrl(blobId: string): Promise<string | null> {
+  const blob = await getBlob(blobId)
+  return blob ? URL.createObjectURL(blob) : null
+}
+
+/** Revoga uma object URL de áudio local em produção (RNF-04.2). */
+function defaultRevokeBlobUrl(url: string): void {
+  URL.revokeObjectURL(url)
+}
+
 export interface AudioEngineOptions {
   store: CronoStore
   /** O relógio do motor. Trocado nos testes. */
   scheduler?: FrameScheduler
   /**
-   * Como nascem os players. Trocado nos testes por um dublê.
+   * Como nascem os players do YouTube. Trocado nos testes por um dublê.
    *
    * O segundo argumento diz **qual canal** está sendo criado. Não serve para
    * nada em produção (o `createYouTubeChannel` o ignora), mas evita que o teste
@@ -99,6 +152,24 @@ export interface AudioEngineOptions {
     options: CreatePlayerOptions,
     channel: ChannelName,
   ) => Promise<MediaChannel>
+  /**
+   * Como nasce o backend de áudio local. Trocado nos testes por um dublê, e
+   * espelha o `createChannel` do YouTube — inclusive o segundo argumento com o
+   * canal, que o `createLocalAudioChannel` de produção ignora.
+   */
+  createLocalChannel?: (
+    options: CreateLocalChannelOptions,
+    channel: ChannelName,
+  ) => MediaChannel
+  /**
+   * Resolve o `blobId` de um item local nos bytes → object URL que o `<audio>`
+   * toca, ou `null` se o blob sumiu do cofre. Quem faz isso é a **costura**, não
+   * o backend local (RNF-04.2): o motor é o único que fala com o store. Trocado
+   * nos testes por um dublê que não depende do IndexedDB nem do `URL`.
+   */
+  resolveBlobUrl?: (blobId: string) => Promise<string | null>
+  /** Revoga uma object URL criada por `resolveBlobUrl` (RNF-04.2). */
+  revokeBlobUrl?: (url: string) => void
   pollMs?: number
 }
 
@@ -111,7 +182,7 @@ export interface AudioEngine {
   /** Entrega o div escondido ao player do fundo. */
   attachBackground(host: HTMLElement | null): void
   /**
-   * Refaz os players que não conseguiram nascer.
+   * Refaz os players do YouTube que não conseguiram nascer.
    *
    * Sem isto, uma falha na criação é definitiva: o `ref` do React só dispara na
    * montagem, então ninguém chamaria `attach` de novo e o canal ficaria morto
@@ -160,6 +231,9 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
     store,
     scheduler,
     createChannel = createYouTubeChannel,
+    createLocalChannel = createLocalAudioChannel,
+    resolveBlobUrl = defaultResolveBlobUrl,
+    revokeBlobUrl = defaultRevokeBlobUrl,
     pollMs = POLL_MS,
   } = options
 
@@ -167,59 +241,103 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
   let snapshot: EngineSnapshot = EMPTY_SNAPSHOT
   let destroyed = false
 
-  const players: Record<ChannelName, MediaChannel | null> = {
+  /** O backend do YouTube de cada canal — o iframe persistente. */
+  const youtube: Record<ChannelName, MediaChannel | null> = {
     main: null,
     background: null,
   }
-  /** Que vídeo está carregado em cada player, para não recarregar à toa. */
+  /**
+   * O backend de áudio local de cada canal — o `<audio>` que fica ao lado do
+   * iframe (D2). Nasce sob demanda: só existe depois que o canal precisa tocar
+   * um item local pela primeira vez.
+   */
+  const local: Record<ChannelName, MediaChannel | null> = {
+    main: null,
+    background: null,
+  }
+  /**
+   * Qual backend é a **voz** do canal agora — para onde o volume e o transporte
+   * do mixer vão. `null` enquanto nada foi carregado. Trocar de valor pausa o
+   * backend anterior, para o inativo ficar em silêncio de verdade.
+   */
+  const active: Record<ChannelName, MediaKind | null> = {
+    main: null,
+    background: null,
+  }
+  /**
+   * A object URL que o backend local de cada canal está tocando, guardada só
+   * para revogá-la quando a faixa troca ou no `destroy` (RNF-04.2). Criar e
+   * revogar a URL é da costura; o backend local a recebe pronta.
+   */
+  const localUrl: Record<ChannelName, string | null> = {
+    main: null,
+    background: null,
+  }
+  /**
+   * Sobe a cada novo pedido de carga num canal. A resolução assíncrona do blob
+   * captura o valor de agora; se um pedido mais novo chegar antes de ela
+   * terminar (o operador trocou de faixa, ou removeu o item), o token não
+   * confere e a resolução velha se descarta — revogando a URL que criou à toa —
+   * em vez de tocar algo que já não é mais para tocar.
+   */
+  const loadToken: Record<ChannelName, number> = {
+    main: 0,
+    background: 0,
+  }
+  /** Que mídia está carregada em cada canal (chave do `kind`), para não recarregar à toa. */
   const loaded: Record<ChannelName, string | null> = {
     main: null,
     background: null,
   }
-  /** Cria um player por vez, por canal, mesmo com React montando duas vezes. */
+  /** Cria um player do YouTube por vez, por canal, mesmo com React montando duas vezes. */
   const pending: Record<ChannelName, Promise<void> | null> = {
     main: null,
     background: null,
   }
-  /** O retângulo da página que cada canal ocupa hoje. */
+  /** O retângulo da página que cada canal ocupa hoje (do iframe). */
   const hosts: Record<ChannelName, HTMLElement | null> = {
     main: null,
     background: null,
   }
-  /** Canal cujo player não conseguiu nascer — candidato a nova tentativa. */
+  /** Canal cujo iframe não conseguiu nascer — candidato a nova tentativa. */
   const down: Record<ChannelName, boolean> = {
     main: false,
     background: false,
   }
   /**
-   * Vídeo engatilhado num canal: escolhido, mas que o player ainda não recebeu.
+   * Mídia engatilhada num canal: escolhida, mas que o backend ativo ainda não
+   * pôs no ar.
    *
-   * Engatilhar é **anotação nossa**, não comando ao YouTube — e isso é
-   * deliberado. Mandar `cueVideoById` e, no mesmo tique, `playVideo` é uma
+   * No YouTube, engatilhar é **anotação nossa**, não comando ao iframe — e isso
+   * é deliberado. Mandar `cueVideoById` e, no mesmo tique, `playVideo` é uma
    * corrida perdida: os comandos viajam por `postMessage` até o iframe, e o play
    * chega enquanto o cue ainda está buscando o vídeo. O player fica sem vídeo
    * registrado e o play vira erro 2 — "Link do vídeo inválido" no meio do culto,
    * com o fundo mudo. O `loadVideoById` não tem esse problema porque é um
    * comando só, que carrega e toca de uma vez; é ele que resolve o engatilhado
    * quando o mixer manda tocar.
+   *
+   * No local não há essa corrida: o `cue` já apontou o `src` e mandou o
+   * `<audio>` bufferizar, então a partida é só um `play`.
    */
-  const cued: Record<ChannelName, string | null> = {
+  const cued: Record<ChannelName, MediaRef | null> = {
     main: null,
     background: null,
   }
   /**
-   * O que o canal deveria estar fazendo enquanto o player ainda nasce.
+   * O que o canal deveria estar fazendo enquanto o backend ativo ainda não pode
+   * receber a mídia — o iframe nascendo, ou o blob local sendo resolvido.
    *
    * O script da API do YouTube leva um tempo para baixar, e o operador não
    * espera: ele abre o app e já manda tocar. Sem guardar o pedido, ele se perde
    * no ar — o botão responde, a topbar muda e não sai som.
    *
-   * `autoplay` acompanha o pedido porque ele pode mudar de ideia no caminho: um
-   * vídeo engatilhado que o mixer resolve tocar antes de o player existir vira
-   * autoplay na chegada.
+   * `autoplay` acompanha o pedido porque ele pode mudar de ideia no caminho: uma
+   * faixa engatilhada que o mixer resolve tocar antes de o backend estar pronto
+   * vira autoplay na chegada.
    */
   interface PedidoPendente {
-    videoId: string
+    ref: MediaRef
     autoplay: boolean
   }
   const pendingLoad: Record<ChannelName, PedidoPendente | null> = {
@@ -229,6 +347,21 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
   let poll: number | null = null
 
   const state = () => store.getState()
+
+  // --- o roteamento entre backends ----------------------------------------
+
+  const backendFor = (
+    channel: ChannelName,
+    kind: MediaKind | null,
+  ): MediaChannel | null => {
+    if (kind === 'youtube') return youtube[channel]
+    if (kind === 'local') return local[channel]
+    return null
+  }
+
+  /** O backend que é a voz do canal agora — ou `null` se nada foi carregado. */
+  const activeBackend = (channel: ChannelName): MediaChannel | null =>
+    backendFor(channel, active[channel])
 
   // --- o observável -------------------------------------------------------
 
@@ -261,34 +394,36 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
     backgroundFader: inicial.backgroundFader,
     autoReturnBackground: inicial.preferences.autoReturnBackground,
 
-    // O mixer anuncia o volume; aqui ele vira comando de player.
+    // O mixer anuncia o volume; aqui ele vira comando do backend ativo. O
+    // inativo fica pausado (silencioso) e não recebe volume.
     onVolume: (channel, volume) => {
-      players[channel]?.setVolume(volume)
+      activeBackend(channel)?.setVolume(volume)
       publishFromMixer()
     },
 
     onTransport: (channel, action) => {
-      const player = players[channel]
-      if (!player) {
-        // Player ainda nascendo: o comando não pode se perder no ar. Ele vira
-        // intenção no pedido guardado, e chega junto com o vídeo.
+      const backend = activeBackend(channel)
+      // Backend ativo ainda não pronto — o iframe nascendo, ou o blob local
+      // sendo resolvido. O comando não pode se perder no ar: vira intenção no
+      // pedido guardado, e chega junto com a mídia.
+      if (!backend || pendingLoad[channel]) {
         const pedido = pendingLoad[channel]
         if (pedido) pedido.autoplay = action === 'play'
         return
       }
       if (action === 'pause') {
-        player.pause()
+        backend.pause()
         return
       }
-      // Canal com faixa engatilhada: quem dá a partida é o `loadVideoById`, num
-      // comando só — ver o comentário de `cued`.
+      // Canal com faixa engatilhada: quem dá a partida é o `startCued`, no
+      // comando certo para cada backend (ver `cued`).
       const engatilhado = cued[channel]
       if (engatilhado !== null) {
         cued[channel] = null
-        player.load(engatilhado)
+        startCued(channel, engatilhado)
         return
       }
-      player.play()
+      backend.play()
     },
 
     onModeChange: () => publishFromMixer(),
@@ -298,13 +433,50 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
 
   const algumCaido = (): boolean => down.main || down.background
 
-  /** Solta o player de um canal, sem mexer em quem é o dono do retângulo. */
-  const releasePlayer = (channel: ChannelName): void => {
-    players[channel]?.destroy()
-    players[channel] = null
-    loaded[channel] = null
-    cued[channel] = null
-    pendingLoad[channel] = null
+  /**
+   * Solta o backend do YouTube de um canal, sem mexer em quem é o dono do
+   * retângulo.
+   *
+   * Só zera o que descreve a mídia (`loaded`/`cued`/`pendingLoad`/`active`) se o
+   * YouTube era mesmo a voz do canal: se um item local estava tocando, o
+   * retângulo do iframe pode ter saído da árvore, mas o `<audio>` ao lado segue
+   * — o estado dele não pode ser apagado junto.
+   */
+  const releaseYouTube = (channel: ChannelName): void => {
+    youtube[channel]?.destroy()
+    youtube[channel] = null
+    if (active[channel] === 'youtube') {
+      loaded[channel] = null
+      cued[channel] = null
+      pendingLoad[channel] = null
+      active[channel] = null
+    }
+  }
+
+  /** Cria o backend local do canal sob demanda, já no volume atual do mixer. */
+  const ensureLocal = (channel: ChannelName): MediaChannel => {
+    const existing = local[channel]
+    if (existing) return existing
+    const backend = createLocalChannel(
+      {
+        onStateChange: (playerState) => handleState(channel, playerState),
+        onError: (error) =>
+          publish({
+            error:
+              channel === 'background'
+                ? `Fundo: ${error.message}`
+                : error.message,
+          }),
+      },
+      channel,
+    )
+    local[channel] = backend
+    // O backend nasce em volume cheio, e o mixer só avisa quando o valor MUDA.
+    // Sem esta linha, a primeira entrada de um item local sairia no volume
+    // máximo antes do primeiro quadro do fade — o mesmo cuidado do iframe.
+    backend.setVolume(mixer.getVolume(channel))
+    startPolling()
+    return backend
   }
 
   const attach = (
@@ -316,7 +488,7 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
     if (!container) {
       hosts[channel] = null
       down[channel] = false
-      releasePlayer(channel)
+      releaseYouTube(channel)
       publish({ playerDown: algumCaido() })
       return
     }
@@ -324,15 +496,15 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
     // O retângulo mudou de nó (remontagem da árvore): o player velho ficou
     // preso a um elemento que já saiu da página.
     if (hosts[channel] !== null && hosts[channel] !== container) {
-      releasePlayer(channel)
+      releaseYouTube(channel)
     }
     hosts[channel] = container
 
-    if (players[channel] || pending[channel]) return
+    if (youtube[channel] || pending[channel]) return
     spawn(channel, container)
   }
 
-  /** Monta um player novo no retângulo do canal. */
+  /** Monta um iframe do YouTube novo no retângulo do canal. */
   const spawn = (channel: ChannelName, container: HTMLElement): void => {
     // O YouTube **substitui** o elemento que recebe pelo iframe. Dar a ele um
     // filho criado à mão, e não o div que o React controla, evita que o React
@@ -364,18 +536,21 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
         }
         const eraQueda = down[channel]
         down[channel] = false
-        players[channel] = created
+        youtube[channel] = created
         // O player nasce em volume 100; o mixer só avisa quando o valor MUDA,
         // e no silêncio ele não muda. Sem esta linha, o primeiro play sairia
         // no volume cheio antes do primeiro quadro do fade.
         created.setVolume(mixer.getVolume(channel))
 
-        // Pedido que chegou enquanto ele nascia — inclusive o que o mixer
-        // mandou tocar sem ter em quem mandar.
+        // Pedido que chegou enquanto ele nascia — mas só se ainda for do
+        // YouTube. Se um item local passou a ser a voz do canal nesse
+        // meio-tempo, o iframe nasce ocioso: quem manda agora é o `<audio>`.
         const pedido = pendingLoad[channel]
-        pendingLoad[channel] = null
-        if (pedido?.autoplay) created.load(pedido.videoId)
-        else if (pedido) cued[channel] = pedido.videoId
+        if (pedido && pedido.ref.kind === 'youtube') {
+          pendingLoad[channel] = null
+          if (pedido.autoplay) created.load(pedido.ref.videoId)
+          else cued[channel] = pedido.ref
+        }
 
         // Deu certo na segunda: o aviso da tentativa anterior agora mentiria.
         publish({
@@ -402,7 +577,7 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
       })
   }
 
-  /** Refaz um player caído, se houver retângulo esperando por ele. */
+  /** Refaz um iframe caído, se houver retângulo esperando por ele. */
   const retry = (channel: ChannelName): void => {
     if (destroyed || !down[channel] || pending[channel]) return
     const container = hosts[channel]
@@ -421,33 +596,143 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
   }
 
   /**
-   * Escolhe o vídeo de um canal.
+   * Dá a partida numa faixa engatilhada, do jeito certo para cada backend.
    *
-   * Com `autoplay`, vai direto ao player pelo `loadVideoById`, que carrega e
-   * toca de uma vez. Sem, fica **só anotado** em `cued`: o player não recebe
-   * nada agora, e o vídeo entra nele no instante em que o mixer mandar tocar.
+   * No YouTube, engatilhar foi anotação nossa (nada foi ao iframe): a partida é
+   * um `load`, um comando só que evita a corrida cue/play. No local, o `cue` já
+   * apontou o `src`; a partida é só um `play`, sem re-apontar o arquivo.
+   */
+  const startCued = (channel: ChannelName, ref: MediaRef): void => {
+    if (ref.kind === 'youtube') {
+      youtube[channel]?.load(ref.videoId)
+      return
+    }
+    local[channel]?.play()
+  }
+
+  /**
+   * Resolve o blob de um item local e entrega a URL ao backend — ou reporta que
+   * o arquivo sumiu (RF-11.5/6). Assíncrono; o `token` garante que uma resolução
+   * ultrapassada por um pedido mais novo se descarte sem tocar nada.
+   */
+  const resolveLocal = async (
+    channel: ChannelName,
+    ref: LocalRef,
+    token: number,
+  ): Promise<void> => {
+    const url = await resolveBlobUrl(ref.blobId)
+
+    if (destroyed || loadToken[channel] !== token) {
+      // Pedido ultrapassado (troca/remoção de faixa) ou motor desmontado: a URL
+      // recém-criada não vai a lugar nenhum — revoga para não vazar (RNF-04.2).
+      if (url) revokeBlobUrl(url)
+      return
+    }
+
+    const pedido = pendingLoad[channel]
+    pendingLoad[channel] = null
+    const autoplay = pedido?.autoplay ?? false
+
+    if (!url) {
+      // Blob ausente: o backend local traduz num erro visível (NO_SOURCE), sem
+      // som, reaproveitando o caminho de erro que a tela já sabe mostrar.
+      local[channel]?.load('')
+      return
+    }
+
+    const previous = localUrl[channel]
+    localUrl[channel] = url
+    if (autoplay) {
+      cued[channel] = null
+      local[channel]?.load(url)
+    } else {
+      cued[channel] = ref
+      local[channel]?.cue(url)
+    }
+    // Revoga a URL da faixa anterior só depois que a nova já está no `<audio>`.
+    if (previous && previous !== url) revokeBlobUrl(previous)
+  }
+
+  /** Revoga a object URL que o backend local do canal segurava (RNF-04.2). */
+  const revokeLocalUrl = (channel: ChannelName): void => {
+    const url = localUrl[channel]
+    if (url) revokeBlobUrl(url)
+    localUrl[channel] = null
+  }
+
+  /**
+   * Cancela a carga pendente de um canal — o "não toque mais nada" de uma parada
+   * ou remoção. Faz duas coisas que precisam andar juntas:
+   *
+   * - Sobe o `loadToken`, para uma resolução de blob em voo se descartar em vez
+   *   de tocar uma faixa que já não é para tocar.
+   * - Zera o `pendingLoad`. Sem isto, um pedido órfão ficaria pendurado, e como o
+   *   `onTransport` trata "há `pendingLoad`" como "backend ainda não pronto", ele
+   *   passaria a **engolir todo play/pause** do canal — o vídeo do YouTube nunca
+   *   pausaria, só ficaria mudo enquanto continua tocando por baixo.
+   */
+  const cancelLoad = (channel: ChannelName): void => {
+    loadToken[channel] += 1
+    pendingLoad[channel] = null
+  }
+
+  /**
+   * Escolhe a mídia de um canal e a roteia para o backend certo.
+   *
+   * Com `autoplay`, vai direto ao backend (o `load` do YouTube carrega e toca de
+   * uma vez; o local resolve o blob e toca). Sem, fica **engatilhada** em `cued`:
+   * o backend não recebe partida agora, e a mídia entra no instante em que o
+   * mixer mandar tocar.
    */
   const put = (
     channel: ChannelName,
-    videoId: string,
+    ref: MediaRef,
     autoplay: boolean,
   ): void => {
-    loaded[channel] = videoId
-    const player = players[channel]
-    if (!player) {
-      // Player ainda nascendo — ou caído. O pedido fica de pé e é aplicado na
-      // chegada; a ação do operador é o pedido de nova tentativa mais natural
-      // que existe, então ela também remonta o que caiu.
-      pendingLoad[channel] = { videoId, autoplay }
-      retry(channel)
+    loaded[channel] = refKey(ref)
+    const token = (loadToken[channel] += 1)
+    // Este pedido supera qualquer anterior: nasce sem carga pendente, e cada
+    // ramo abaixo a re-arma só se de fato ficar algo em voo. Sem isto, um
+    // `pendingLoad` velho sobreviveria a um `put` de YouTube pronto e engoliria
+    // o transporte do canal (ver `cancelLoad`).
+    pendingLoad[channel] = null
+
+    // Trocar o backend ativo do canal (YouTube ↔ local): silencia o anterior e
+    // leva o novo ao volume de agora, para ele não entrar num salto.
+    if (active[channel] !== ref.kind) {
+      backendFor(channel, active[channel])?.pause()
+      // Saindo do local: a object URL da faixa que perde a voz não serve mais —
+      // revoga já, sem esperar o `destroy` (RNF-04.2).
+      if (active[channel] === 'local') revokeLocalUrl(channel)
+      active[channel] = ref.kind
+      backendFor(channel, ref.kind)?.setVolume(mixer.getVolume(channel))
+    }
+
+    if (ref.kind === 'youtube') {
+      const player = youtube[channel]
+      if (!player) {
+        // Iframe ainda nascendo — ou caído. O pedido fica de pé e é aplicado na
+        // chegada; a ação do operador é o pedido de nova tentativa mais natural
+        // que existe, então ela também remonta o que caiu.
+        pendingLoad[channel] = { ref, autoplay }
+        retry(channel)
+        return
+      }
+      if (!autoplay) {
+        cued[channel] = ref
+        return
+      }
+      cued[channel] = null
+      player.load(ref.videoId)
       return
     }
-    if (!autoplay) {
-      cued[channel] = videoId
-      return
-    }
-    cued[channel] = null
-    player.load(videoId)
+
+    // Local: o backend nasce agora (barato), mas a URL do blob vem de uma
+    // leitura assíncrona do cofre. Até ela chegar, o pedido fica pendente — como
+    // o iframe nascendo —, e o transporte que vier atualiza o autoplay.
+    ensureLocal(channel)
+    pendingLoad[channel] = { ref, autoplay }
+    void resolveLocal(channel, ref, token)
   }
 
   /**
@@ -456,8 +741,8 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
    * `play` atrás (quando ele já está no ar, ou descendo, o transporte não
    * repete o comando).
    */
-  const load = (channel: ChannelName, videoId: string): void =>
-    put(channel, videoId, true)
+  const load = (channel: ChannelName, ref: MediaRef): void =>
+    put(channel, ref, true)
 
   /**
    * Engatilha sem tocar. É o certo para o **fundo**, porque nele quem manda
@@ -474,23 +759,22 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
    * subindo do zero, e o primeiro instante — justamente o do buffer — é o
    * inaudível.
    */
-  const engatilhar = (channel: ChannelName, videoId: string): void =>
-    put(channel, videoId, false)
+  const engatilhar = (channel: ChannelName, ref: MediaRef): void =>
+    put(channel, ref, false)
 
   /**
    * Garante que o fundo tem faixa engatilhada antes de precisar dela.
    *
-   * O mixer manda "toque o fundo" sem saber se há vídeo lá dentro. Chamar isto
+   * O mixer manda "toque o fundo" sem saber se há mídia lá dentro. Chamar isto
    * antes de qualquer caminho que devolva o fundo evita o pior silêncio de
    * todos: o que acontece quando a música acaba e nada entra no lugar.
    */
   const ensureBackgroundLoaded = (): void => {
     const track = state().selectedBackground()
     if (!track) return
-    const videoId = youtubeId(track)
-    if (videoId === null) return
-    if (loaded.background === videoId) return
-    engatilhar('background', videoId)
+    const ref = toMediaRef(track)
+    if (loaded.background === refKey(ref)) return
+    engatilhar('background', ref)
   }
 
   // --- o tempo ------------------------------------------------------------
@@ -501,15 +785,17 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
   }
 
   /**
-   * Lê o relógio dos players.
+   * Lê o relógio dos backends ativos.
    *
-   * A IFrame API não avisa o tempo passar — não existe evento de progresso —,
-   * então perguntamos. Quatro vezes por segundo é o suficiente para o
-   * cronômetro da topbar não parecer travado e pouco o bastante para não pesar.
+   * O iframe não avisa o tempo passar — não existe evento de progresso —, então
+   * perguntamos. Quatro vezes por segundo é o suficiente para o cronômetro da
+   * topbar não parecer travado e pouco o bastante para não pesar. Para um item
+   * local, `getDuration` já devolve a duração do arquivo assim que os metadados
+   * carregam, então a duração do MP3 é anotada sem oEmbed (RF-11.3).
    */
   const tickTime = (): void => {
-    const main = players.main
-    const background = players.background
+    const main = activeBackend('main')
+    const background = activeBackend('background')
     const patch: Partial<EngineSnapshot> = {}
 
     if (main) {
@@ -543,10 +829,7 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
   const playQueueItem = (id: string): void => {
     const item = state().findQueueItem(id)
     if (!item) return
-    // Ponte da Etapa 2: só YouTube toca por ora (ver `youtubeId`). O roteamento
-    // do áudio local é da Etapa 4; nenhum item local existe até a Etapa 5.
-    const videoId = youtubeId(item)
-    if (videoId === null) return
+    const ref = toMediaRef(item)
     const { mode, currentId } = state()
 
     publish({ error: null })
@@ -559,17 +842,19 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
       // (RF-04.4) — o operador nunca ouve corte seco.
       mixer.swap('main', () => {
         state().play(id)
-        load('main', videoId)
+        load('main', ref)
         publish({ elapsedSec: 0 })
       })
       return
     }
 
     state().play(id)
-    load('main', videoId)
+    load('main', ref)
     publish({ elapsedSec: 0 })
     // Com o fundo tocando isto vira crossfade: ele desce enquanto o louvor
-    // sobe, sem corte (RF-04.5).
+    // sobe, sem corte (RF-04.5). O louvor e o fundo podem ser de fontes
+    // diferentes (um MP3 local e um vídeo do YouTube), e o crossfade continua
+    // sendo só dois `setVolume` em backends distintos (RF-11.4).
     mixer.playMain()
   }
 
@@ -586,13 +871,11 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
   const backgroundEnded = (): void => {
     const { backgrounds } = state()
     if (backgrounds.length === 0) return
-    // Com uma faixa só, "a próxima" é ela mesma — e o vídeo recomeça (RF-03.6).
+    // Com uma faixa só, "a próxima" é ela mesma — e a faixa recomeça (RF-03.6).
     state().nextBackground()
     const track = state().selectedBackground()
     if (!track) return
-    const videoId = youtubeId(track)
-    if (videoId === null) return
-    engatilhar('background', videoId)
+    engatilhar('background', toMediaRef(track))
     publish({ backgroundElapsedSec: 0 })
     // A faixa anterior terminou em silêncio; não há o que abaixar, só o que
     // subir. É o `restart` que manda o transporte tocar a faixa engatilhada.
@@ -610,6 +893,9 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
    */
   const stopMain = (): void => {
     if (state().currentId === null) return
+    // Se um item local ainda estava resolvendo o blob, ele não pode entrar
+    // tocando durante a saída: cancela a carga pendente antes de mandar parar.
+    cancelLoad('main')
     // A faixa de fundo precisa estar carregada **antes**: quando a rampa
     // terminar, ela entra no mesmo instante.
     ensureBackgroundLoaded()
@@ -640,6 +926,9 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
   }
 
   const stopBackground = (): void => {
+    // Mesma razão do `stopMain`: um fundo local a meio de resolver não deve
+    // entrar tocando durante a saída.
+    cancelLoad('background')
     mixer.stopBackground(() => state().stopBackground())
     publishFromMixer()
   }
@@ -655,8 +944,7 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
     const trocar = (): void => {
       state().nextBackground()
       const track = state().selectedBackground()
-      const videoId = track && youtubeId(track)
-      if (videoId) engatilhar('background', videoId)
+      if (track) engatilhar('background', toMediaRef(track))
       publish({ backgroundElapsedSec: 0 })
     }
 
@@ -672,8 +960,7 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
     const trocar = (): void => {
       state().selectBackground(id)
       const track = state().selectedBackground()
-      const videoId = track && youtubeId(track)
-      if (videoId) engatilhar('background', videoId)
+      if (track) engatilhar('background', toMediaRef(track))
       publish({ backgroundElapsedSec: 0 })
     }
 
@@ -789,15 +1076,21 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
 
       const track = state().selectedBackground()
       if (!track) {
-        players.background?.pause()
+        // Biblioteca vazia: o fundo cai. Invalida uma resolução de blob em voo
+        // (não vá ela tocar um fundo que não existe mais) e revoga a URL atual.
+        // `active` permanece apontando para o backend até a rampa terminar: é
+        // por ele que o `stopBackground` leva o volume a zero — zerá-lo agora
+        // congelaria o som no volume atual, sem por onde descer.
+        cancelLoad('background')
+        activeBackend('background')?.pause()
+        revokeLocalUrl('background')
         loaded.background = null
         cued.background = null
         mixer.stopBackground()
         publishFromMixer()
         return
       }
-      const videoId = youtubeId(track)
-      if (videoId !== null) engatilhar('background', videoId)
+      engatilhar('background', toMediaRef(track))
       if (state().mode === 'background') mixer.restart('background')
     },
 
@@ -805,8 +1098,12 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
       const eraOAtual = state().currentId === id
       state().removeFromQueue(id)
       // Tirar da fila quem está no ar tira do ar também — e o som tem que
-      // acompanhar a tela.
-      if (eraOAtual) mixer.stopMain()
+      // acompanhar a tela. Cancela a carga pendente para o item removido não
+      // começar a tocar durante a saída (e o transporte não ficar engolido).
+      if (eraOAtual) {
+        cancelLoad('main')
+        mixer.stopMain()
+      }
       publishFromMixer()
     },
 
@@ -844,26 +1141,17 @@ export function createAudioEngine(options: AudioEngineOptions): AudioEngine {
       if (poll !== null) window.clearInterval(poll)
       poll = null
       mixer.destroy()
-      releasePlayer('main')
-      releasePlayer('background')
+      releaseYouTube('main')
+      releaseYouTube('background')
+      local.main?.destroy()
+      local.background?.destroy()
+      revokeLocalUrl('main')
+      revokeLocalUrl('background')
       hosts.main = null
       hosts.background = null
       listeners.clear()
     },
   }
-}
-
-/**
- * O id do vídeo de um item — ou `null` se ele for áudio local (RF-11).
- *
- * **Ponte da Etapa 2.** O engine ainda só sabe falar com o iframe do YouTube;
- * o roteamento por `kind` — dois backends por canal, object URL para o arquivo
- * local — chega na Etapa 4, e é ela que troca este helper por um `toMediaRef`
- * de verdade. Até lá um item local simplesmente não é carregado, e nenhum
- * existe: a importação é da Etapa 5.
- */
-function youtubeId(media: QueueItem | Background): string | null {
-  return media.kind === 'youtube' ? media.videoId : null
 }
 
 function toFadeSnapshot(
