@@ -1,4 +1,4 @@
-import { Pause, Play } from 'lucide-react'
+import { FileMusic, Pause, Play } from 'lucide-react'
 import { useCallback } from 'react'
 import { useCrono, useEngine, useEngineValue } from './context'
 
@@ -14,6 +14,12 @@ import { useCrono, useEngine, useEngineValue } from './context'
  *
  * Abaixo dele, o erro do player em português (RNF-03.3) — nunca um
  * `.catch(() => {})`.
+ *
+ * Com um **arquivo do PC** no ar (RF-11) não há vídeo nenhum para pré-escutar:
+ * o iframe continua montado atrás, pausado, e o retângulo passa a narrar a
+ * faixa. Mostrar o iframe ali seria pior do que inútil — ele estaria exibindo,
+ * congelado, o último vídeo do YouTube que tocou, como se fosse o que está
+ * saindo na caixa de som agora.
  */
 export function PreviewDeck() {
   const engine = useEngine()
@@ -39,14 +45,20 @@ export function PreviewDeck() {
   )
   const error = useEngineValue((s) => s.error)
   const playerDown = useEngineValue((s) => s.playerDown)
+  const mainKind = useEngineValue((s) => s.mainKind)
 
   const current = queue.find((item) => item.id === currentId) ?? null
   const background =
     backgrounds.find((track) => track.id === selectedBackgroundId) ?? null
 
-  // Enquanto houver som do louvor — inclusive durante a descida — o vídeo
-  // continua à vista. Só some quando o canal chega ao silêncio de verdade.
-  const mostrandoVideo = currentId !== null || mainPhase !== 'silent'
+  // Enquanto houver som do louvor — inclusive durante a descida — o retângulo
+  // fica ocupado. Só volta ao repouso quando o canal chega ao silêncio.
+  const noAr = currentId !== null || mainPhase !== 'silent'
+  // Quem decide se há vídeo a mostrar é o **motor**, não o item da fila: o item
+  // some no instante em que o operador o remove, e a rampa continua por mais
+  // dois segundos (ver `mainKind` no motor).
+  const arquivoNoAr = noAr && mainKind === 'local'
+  const mostrandoVideo = noAr && !arquivoNoAr
 
   const progresso =
     mode === 'main' && current?.durationSec
@@ -63,7 +75,18 @@ export function PreviewDeck() {
       </h2>
       <div className={`preview ${mostrandoVideo ? 'has-video' : ''}`}>
         <div className="preview-player" ref={attachPlayer} />
-        {!mostrandoVideo && (
+        {arquivoNoAr && (
+          <div className="preview-idle preview-file">
+            <span>
+              <FileMusic size={19} />
+            </span>
+            {/* Durante a saída de um item que acabou de ser removido da fila
+                não há mais título a mostrar — e inventar um seria pior. */}
+            <p>{current?.kind === 'local' ? current.title : 'Saindo do ar…'}</p>
+            <small>Arquivo local</small>
+          </div>
+        )}
+        {!noAr && (
           <div className="preview-idle">
             <span>
               {mode === 'main' ? <Pause size={19} /> : <Play size={19} />}

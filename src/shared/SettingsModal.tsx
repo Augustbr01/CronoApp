@@ -1,8 +1,8 @@
 import { Download, Upload, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { formatSeconds, msToSeconds, secondsToMs } from './format'
+import { formatBytes, formatSeconds, msToSeconds, secondsToMs } from './format'
 import { useFocusTrap } from './hooks'
-import { useCrono } from '../features/mixer/context'
+import { useCrono, useEngine } from '../features/mixer/context'
 import {
   backupFileName,
   exportBackupJson,
@@ -34,6 +34,7 @@ interface SettingsModalProps {
 export function SettingsModal({ onClose }: SettingsModalProps) {
   const dialogRef = useRef<HTMLElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const engine = useEngine()
 
   const preferences = useCrono((state) => state.preferences)
   const setMainFadeMs = useCrono((state) => state.setMainFadeMs)
@@ -71,6 +72,10 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const importar = async (file: File): Promise<void> => {
     try {
       importState(parseBackupJson(await file.text()))
+      // O backup trocou fila e biblioteca inteiras: os áudios importados da
+      // instalação anterior acabaram de perder o dono, todos de uma vez
+      // (RF-11.5).
+      engine.sweepOrphanAudio()
       setAviso('Backup importado. O painel voltou para standby.')
     } catch (error) {
       // Aqui existe alguém olhando a tela, esperando o resultado de uma ação
@@ -202,6 +207,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           </small>
         </div>
 
+        <StorageUsage />
+
         {aviso && (
           <p className="settings-notice" role="status">
             {aviso}
@@ -213,6 +220,68 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           culto.
         </div>
       </section>
+    </div>
+  )
+}
+
+/**
+ * Quanto o app está ocupando no dispositivo (RF-11).
+ *
+ * Existe por causa do áudio local: enquanto tudo era link do YouTube, o app
+ * guardava texto e ninguém precisava pensar em espaço. Com MP3 no IndexedDB,
+ * "não coube" passou a ser um desfecho possível — e o operador merece ver isso
+ * chegando, em vez de descobrir no sábado à noite que o próximo arquivo não
+ * entra.
+ *
+ * O número é do `navigator.storage.estimate()`, que mede a **origem inteira**, e
+ * o texto diz isso: prometer "seus áudios ocupam X" seria uma precisão que a API
+ * não dá. Navegador sem a API simplesmente não mostra o campo — é melhor não
+ * dizer nada do que dizer um número inventado.
+ */
+function StorageUsage() {
+  const [uso, setUso] = useState<StorageEstimate | null>(null)
+
+  useEffect(() => {
+    let vivo = true
+    const manager: StorageManager | undefined = navigator.storage
+    if (!manager?.estimate) return
+
+    void manager.estimate().then(
+      (estimate) => {
+        if (vivo) setUso(estimate)
+      },
+      () => {
+        // Sem estimativa não há campo — ver o cabeçalho.
+      },
+    )
+
+    return () => {
+      vivo = false
+    }
+  }, [])
+
+  if (uso?.usage === undefined) return null
+  const usado = uso.usage
+  const total = uso.quota ?? 0
+
+  return (
+    <div className="settings-field">
+      <label>
+        Espaço usado no dispositivo
+        <b>{formatBytes(usado)}</b>
+      </label>
+      {total > 0 && (
+        // Decorativo: o número e o total já estão no texto ao lado e abaixo,
+        // então a barra não precisa se anunciar de novo ao leitor de tela.
+        <div className="storage-bar" aria-hidden="true">
+          <i style={{ width: `${Math.min(100, (usado / total) * 100)}%` }} />
+        </div>
+      )}
+      <small>
+        Tudo o que este app guarda aqui — e os áudios importados do PC são o que
+        de fato ocupa espaço.
+        {total > 0 && ` O navegador reserva até ${formatBytes(total)}.`}
+      </small>
     </div>
   )
 }

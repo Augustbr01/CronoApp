@@ -76,3 +76,35 @@ export function secondsToMs(seconds: number): number {
 export function formatSeconds(seconds: number): string {
   return `${seconds.toFixed(1).replace('.', ',')}s`
 }
+
+/**
+ * Bytes na escala de quem olha: `73400320` → `"70 MB"`.
+ *
+ * Serve ao medidor de armazenamento (RF-11): o operador quer saber se ainda cabe
+ * o louvor de domingo, não o número exato. Por isso a unidade sobe sozinha e a
+ * casa decimal só aparece abaixo de 10 — `1,4 GB` diz alguma coisa, `1,43 GB`
+ * já é ruído, e `1462 MB` obriga a converter de cabeça.
+ *
+ * Usa a escala binária (1024), que é a do `navigator.storage.estimate()`.
+ */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB'
+
+  const unidades = ['B', 'KB', 'MB', 'GB', 'TB']
+  let valor = bytes
+  let escala = 0
+  while (valor >= 1024 && escala < unidades.length - 1) {
+    valor /= 1024
+    escala += 1
+  }
+
+  let casas = valor < 10 && escala > 1 ? 1 : 0
+  // O arredondamento pode empurrar o número para a escala seguinte (`1023,6 B`
+  // vira `1024 B`, que ninguém escreve). Sobe mais um degrau nesse caso.
+  if (Number(valor.toFixed(casas)) >= 1024 && escala < unidades.length - 1) {
+    valor /= 1024
+    escala += 1
+    casas = valor < 10 && escala > 1 ? 1 : 0
+  }
+  return `${valor.toFixed(casas).replace('.', ',')} ${unidades[escala]}`
+}

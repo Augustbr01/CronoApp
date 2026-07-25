@@ -4,9 +4,15 @@ import { createCronoStore } from '../../store'
 import type { CronoStore } from '../../store'
 import { createFakeChannelFactory } from '../../test/fake-channel'
 import type { FakeChannelFactory } from '../../test/fake-channel'
+import { createFakeLocalChannelFactory } from '../../test/fake-local-channel'
+import type { FakeLocalChannelFactory } from '../../test/fake-local-channel'
 import { createFakeScheduler } from '../../test/fake-scheduler'
 import type { FakeScheduler } from '../../test/fake-scheduler'
-import { createMemoryStorage } from '../../test/memory-storage'
+import {
+  createMemoryBlobVault,
+  createMemoryStorage,
+} from '../../test/memory-storage'
+import type { MemoryBlobVault } from '../../test/memory-storage'
 
 /**
  * A costura entre store, motor e player — sem React.
@@ -20,19 +26,32 @@ const FADE_MS = 2000
 
 let store: CronoStore
 let players: FakeChannelFactory
+let locais: FakeLocalChannelFactory
+let cofre: MemoryBlobVault
 let clock: FakeScheduler
 let engine: AudioEngine
+
+/** As opções que todo motor destes testes recebe — tudo em memória. */
+function opcoes() {
+  return {
+    store,
+    scheduler: clock,
+    createChannel: players.create,
+    createLocalChannel: locais.create,
+    blobs: cofre.vault,
+    resolveBlobUrl: cofre.resolveUrl,
+    revokeBlobUrl: cofre.revokeUrl,
+  }
+}
 
 beforeEach(async () => {
   const { storage } = createMemoryStorage()
   store = createCronoStore({ storage, legacyStorage: null })
   players = createFakeChannelFactory()
+  locais = createFakeLocalChannelFactory()
+  cofre = createMemoryBlobVault()
   clock = createFakeScheduler()
-  engine = createAudioEngine({
-    store,
-    scheduler: clock,
-    createChannel: players.create,
-  })
+  engine = createAudioEngine(opcoes())
 
   engine.attachMain(document.createElement('div'))
   engine.attachBackground(document.createElement('div'))
@@ -44,6 +63,14 @@ beforeEach(async () => {
 afterEach(() => {
   engine.destroy()
 })
+
+/**
+ * Deixa as promessas em dia: gravar no cofre, resolver a object URL e a
+ * varredura de órfãos são todos assíncronos, e nenhum deles depende do relógio.
+ */
+async function assentar(): Promise<void> {
+  for (let i = 0; i < 5; i += 1) await Promise.resolve()
+}
 
 function enfileirar(name: string, videoId: string): string {
   return store
@@ -57,6 +84,18 @@ function comFundo(videoId = 'bg-1'): string {
     videoId,
     title: 'Piano worship',
   })
+}
+
+/** Um arquivo escolhido no seletor do sistema. */
+function arquivo(nome: string, type = 'audio/mpeg'): File {
+  return new File(['bytes-de-som'], nome, { type })
+}
+
+/** O item local da fila, já estreitado — falha alto se não for local. */
+function itemLocal(index = 0): { id: string; blobId: string } {
+  const item = store.getState().queue[index]
+  if (item?.kind !== 'local') throw new Error('esperava um item local na fila')
+  return { id: item.id, blobId: item.blobId }
 }
 
 describe('tocar um item da fila', () => {
@@ -566,6 +605,304 @@ describe('a tela só muda quando o som acaba de sair (como o protótipo)', () =>
     expect(store.getState().currentId).toBeNull()
     expect(store.getState().mode).toBe('background')
     expect(players.background().volume).toBeCloseTo(0.4, 2)
+  })
+})
+
+describe('importar áudio do PC (RF-11.1 e RF-11.2)', () => {
+  it('grava os bytes e cria o item apontando para eles', async () => {
+    await engine.importQueueFiles([arquivo('Grandes Coisas.mp3')], 'Ana')
+
+    expect(store.getState().queue[0]).toMatchObject({
+      kind: 'local',
+      name: 'Ana',
+      // Sem oEmbed no caminho: o título já vem pronto no nome do arquivo.
+      title: 'Grandes Coisas.mp3',
+      fileName: 'Grandes Coisas.mp3',
+    })
+    expect(cofre.guardados.has(itemLocal().blobId)).toBe(true)
+  })
+
+  it('o mesmo nome vale para todos os arquivos da mesma escolha', async () => {
+    await engine.importQueueFiles(
+      [arquivo('parte-1.mp3'), arquivo('parte-2.mp3')],
+      'Coral',
+    )
+
+    expect(store.getState().queue.map((item) => item.name)).toEqual([
+      'Coral',
+      'Coral',
+    ])
+    expect(cofre.guardados.size).toBe(2)
+  })
+
+  it('sem espaço no dispositivo, a falha vira frase na tela — e nada entra na fila', async () => {
+    cofre.falharProximaGravacao(new DOMException('quota', 'QuotaExceededError'))
+
+    await engine.importQueueFiles([arquivo('louvor.mp3')], 'Ana')
+
+    // O pior desfecho seria o silencioso: o item na tela sem áudio por trás.
+    expect(store.getState().queue).toHaveLength(0)
+    expect(engine.getSnapshot().error).toContain('Não há espaço no navegador')
+    expect(engine.getSnapshot().error).toContain('louvor.mp3')
+  })
+
+  it('recusa o que não é áudio sem sequer abrir o cofre', async () => {
+    await engine.importQueueFiles([arquivo('slides.pdf', 'application/pdf')])
+
+    expect(store.getState().queue).toHaveLength(0)
+    expect(cofre.guardados.size).toBe(0)
+    expect(engine.getSnapshot().error).toContain('slides.pdf')
+  })
+
+  it('um arquivo recusado no meio não impede os outros', async () => {
+    await engine.importQueueFiles([
+      arquivo('ok-1.mp3'),
+      arquivo('leia-me.txt', 'text/plain'),
+      arquivo('ok-2.mp3'),
+    ])
+
+    expect(store.getState().queue.map((item) => item.title)).toEqual([
+      'ok-1.mp3',
+      'ok-2.mp3',
+    ])
+  })
+
+  it('o fundo importado entra na biblioteca e a primeira faixa já toca (RF-03.4)', async () => {
+    await engine.importBackgroundFiles([arquivo('pads.mp3')])
+    await assentar()
+
+    expect(store.getState().backgrounds[0]).toMatchObject({
+      kind: 'local',
+      title: 'pads.mp3',
+    })
+    expect(store.getState().mode).toBe('background')
+
+    clock.advance(FADE_MS)
+    // Som de verdade saindo pelo backend local, no volume do fader do fundo.
+    expect(locais.background().loads).toHaveLength(1)
+    expect(locais.background().volume).toBeCloseTo(0.4, 2)
+  })
+})
+
+describe('limpeza de órfãos (RF-11.5)', () => {
+  it('remover o item da fila apaga os bytes junto', async () => {
+    await engine.importQueueFiles([arquivo('louvor.mp3')], 'Ana')
+    const { id } = itemLocal()
+
+    engine.removeFromQueue(id)
+    await assentar()
+
+    expect(cofre.guardados.size).toBe(0)
+  })
+
+  it('remover a faixa da biblioteca apaga os bytes junto', async () => {
+    await engine.importBackgroundFiles([arquivo('pads.mp3')])
+    await assentar()
+    const track = store.getState().backgrounds[0]
+
+    engine.removeBackground(track.id)
+    await assentar()
+
+    expect(cofre.guardados.size).toBe(0)
+  })
+
+  it('mas não apaga o arquivo que ainda tem outro dono', async () => {
+    // O mesmo áudio na fila e nos fundos — o que um backup restaurado produz.
+    const blobId = 'ab_compartilhado'
+    cofre.guardados.set(blobId, new Blob(['som']))
+    const id = store.getState().addToQueue({
+      kind: 'local',
+      name: 'Ana',
+      title: 'tema.mp3',
+      blobId,
+      fileName: 'tema.mp3',
+    })
+    store.getState().addBackground({
+      kind: 'local',
+      title: 'tema.mp3',
+      blobId,
+      fileName: 'tema.mp3',
+    })
+
+    engine.removeFromQueue(id)
+    await assentar()
+
+    // Apagar aqui deixaria o fundo mudo por causa de uma remoção na fila.
+    expect(cofre.guardados.has(blobId)).toBe(true)
+  })
+
+  it('a abertura varre os bytes que ninguém referencia mais', async () => {
+    cofre.guardados.set('ab_orfao', new Blob(['som']))
+    cofre.guardados.set('ab_com_dono', new Blob(['som']))
+    store.getState().addToQueue({
+      kind: 'local',
+      name: 'Ana',
+      title: 'tema.mp3',
+      blobId: 'ab_com_dono',
+      fileName: 'tema.mp3',
+    })
+
+    // Um motor novo sobre o mesmo store é exatamente o que abrir o app faz.
+    const outro = createAudioEngine(opcoes())
+    await assentar()
+
+    expect([...cofre.guardados.keys()]).toEqual(['ab_com_dono'])
+    outro.destroy()
+  })
+
+  it('a varredura não leva junto o arquivo que está sendo importado agora', async () => {
+    // A janela é real em produção: a varredura espera a hidratação do
+    // IndexedDB, que pode terminar depois de o operador já ter clicado em
+    // importar. Os dois portões reproduzem exatamente essa sobreposição — a
+    // varredura lista **depois** de os bytes entrarem no cofre e **antes** de o
+    // item existir no store.
+    const soltarGravacao = cofre.travarGravacao()
+    const soltarListagem = cofre.travarListagem()
+    const outro = createAudioEngine(opcoes())
+
+    const importando = outro.importQueueFiles([arquivo('louvor.mp3')], 'Ana')
+    await assentar()
+    // Neste instante: bytes no cofre, item nenhum na fila.
+    expect(cofre.guardados.size).toBe(1)
+    expect(store.getState().queue).toHaveLength(0)
+
+    soltarListagem()
+    await assentar()
+    soltarGravacao()
+    await importando
+    await assentar()
+
+    // Sem a proteção, a varredura teria apagado o que o operador acabou de
+    // escolher — e sobraria um item na fila sem áudio por trás.
+    expect(cofre.guardados.size).toBe(1)
+    expect(store.getState().queue).toHaveLength(1)
+    outro.destroy()
+  })
+
+  it('trocar o estado inteiro (backup importado) recolhe os áudios do estado antigo', async () => {
+    await engine.importQueueFiles([arquivo('do-culto-passado.mp3')], 'Ana')
+    expect(cofre.guardados.size).toBe(1)
+
+    // É o que o botão "Importar JSON" faz: substitui fila e biblioteca de uma
+    // vez, e todos os áudios da instalação anterior perdem o dono juntos.
+    store.getState().importState({
+      ...store.getState().exportState(),
+      queue: [],
+      backgrounds: [],
+    })
+    engine.sweepOrphanAudio()
+    await assentar()
+
+    expect(cofre.guardados.size).toBe(0)
+  })
+})
+
+describe('o ciclo de vida da object URL (RNF-04.2)', () => {
+  it('trocar de arquivo revoga a URL do anterior', async () => {
+    await engine.importQueueFiles(
+      [arquivo('primeira.mp3'), arquivo('segunda.mp3')],
+      'Ana',
+    )
+    const primeira = itemLocal(0)
+    const segunda = itemLocal(1)
+
+    engine.playQueueItem(primeira.id)
+    await assentar()
+    expect(cofre.urlsVivas()).toHaveLength(1)
+
+    engine.playQueueItem(segunda.id)
+    clock.advance(FADE_MS)
+    await assentar()
+
+    // Uma por canal, sempre: a URL segura o Blob inteiro em memória, e num
+    // culto de duas horas isso seria a lista de arquivos toda viva ao mesmo
+    // tempo.
+    expect(cofre.urlsVivas()).toHaveLength(1)
+  })
+
+  it('desmontar o motor não deixa URL viva nenhuma', async () => {
+    await engine.importBackgroundFiles([arquivo('pads.mp3')])
+    await engine.importQueueFiles([arquivo('louvor.mp3')], 'Ana')
+    engine.playQueueItem(itemLocal().id)
+    await assentar()
+    expect(cofre.urlsVivas().length).toBeGreaterThan(0)
+
+    engine.destroy()
+    await assentar()
+
+    expect(cofre.urlsVivas()).toEqual([])
+  })
+
+  it('a resolução ultrapassada por outra não deixa a URL dela para trás', async () => {
+    await engine.importQueueFiles(
+      [arquivo('primeira.mp3'), arquivo('segunda.mp3')],
+      'Ana',
+    )
+
+    // Duas cargas no mesmo canal sem deixar a primeira terminar: a resolução
+    // velha chega depois e tem que se descartar revogando o que criou.
+    engine.playQueueItem(itemLocal(0).id)
+    engine.playQueueItem(itemLocal(1).id)
+    clock.advance(FADE_MS)
+    await assentar()
+
+    expect(cofre.urlsVivas()).toHaveLength(1)
+  })
+})
+
+describe('o arquivo que some do cofre (RF-11.5)', () => {
+  it('avisa o operador em vez de tocar a faixa anterior', async () => {
+    await engine.importBackgroundFiles([arquivo('primeira.mp3')])
+    await assentar()
+    clock.advance(FADE_MS)
+
+    // A segunda faixa entra na biblioteca, mas os bytes dela somem do cofre —
+    // eviction do Chrome, backup restaurado de outro PC, arquivo apagado.
+    await engine.importBackgroundFiles([arquivo('sumida.mp3')])
+    await assentar()
+    const sumida = store.getState().backgrounds[1]
+    if (sumida.kind !== 'local') throw new Error('esperava fundo local')
+    cofre.guardados.delete(sumida.blobId)
+
+    const cargasAntes = locais.background().loads.length
+    engine.selectBackground(sumida.id)
+    clock.advance(FADE_MS)
+    await assentar()
+
+    expect(engine.getSnapshot().error).toContain('não encontrado')
+    // A URL da faixa anterior não fica pendurada num canal que perdeu a voz.
+    expect(cofre.urlsVivas()).toEqual([])
+
+    // E o pedido de tocar não pode ressuscitar a faixa anterior: a tela mostra
+    // a segunda, e som da primeira aqui seria a tela mentindo.
+    const antes = locais.background().commands.length
+    engine.toggleBackground()
+    clock.advance(FADE_MS)
+    await assentar()
+
+    expect(locais.background().commands.slice(antes)).not.toContain('play')
+    expect(locais.background().loads).toHaveLength(cargasAntes)
+  })
+})
+
+describe('o arquivo que termina sozinho', () => {
+  it('vai para o histórico e leva os bytes junto (RF-11.5)', async () => {
+    comFundo()
+    await engine.importQueueFiles([arquivo('louvor.mp3')], 'Ana')
+    engine.playQueueItem(itemLocal().id)
+    await assentar()
+    clock.advance(FADE_MS)
+
+    locais.main().emitEnded()
+    clock.advance(FADE_MS)
+    await assentar()
+
+    expect(store.getState().queue).toHaveLength(0)
+    expect(store.getState().history.map((h) => h.name)).toEqual(['Ana'])
+    expect(store.getState().mode).toBe('background')
+    // O histórico não guarda `blobId` nem toca de novo: esses bytes não têm
+    // mais dono, e um culto inteiro deles encheria a quota do dispositivo.
+    expect(cofre.guardados.size).toBe(0)
   })
 })
 

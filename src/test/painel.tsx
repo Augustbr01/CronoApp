@@ -7,23 +7,30 @@ import type { CronoStore } from '../store'
 import { DEFAULT_PREFERENCES } from '../store/types'
 import { createFakeChannelFactory } from './fake-channel'
 import type { FakeChannelFactory } from './fake-channel'
+import { createFakeLocalChannelFactory } from './fake-local-channel'
+import type { FakeLocalChannelFactory } from './fake-local-channel'
 import { createFakeScheduler } from './fake-scheduler'
 import type { FakeScheduler } from './fake-scheduler'
-import { createMemoryStorage } from './memory-storage'
+import { createMemoryBlobVault, createMemoryStorage } from './memory-storage'
+import type { MemoryBlobVault } from './memory-storage'
 
 /**
  * Monta o painel inteiro sobre dublês.
  *
  * Três coisas trocadas, e é essa troca que faz os testes de interface valerem
- * alguma coisa: o **armazenamento** é memória (sem IndexedDB), os **players**
- * são de mentira (sem rede e sem iframe) e o **relógio** é do teste (dois
- * segundos de fade passam num piscar). O resto — store, motor, componentes — é
- * o código de produção.
+ * alguma coisa: o **armazenamento** é memória (sem IndexedDB e sem cofre de
+ * áudios), os **players** são de mentira (sem rede, sem iframe e sem `<audio>`)
+ * e o **relógio** é do teste (dois segundos de fade passam num piscar). O
+ * resto — store, motor, componentes — é o código de produção.
  */
 
 export interface Painel extends RenderResult {
   store: CronoStore
   players: FakeChannelFactory
+  /** Os backends de áudio local — nascem sob demanda, no primeiro arquivo. */
+  locais: FakeLocalChannelFactory
+  /** O cofre de áudios em memória, com as object URLs que ele emitiu. */
+  cofre: MemoryBlobVault
   clock: FakeScheduler
   /** Deixa o React e as promessas em dia. */
   flush(): Promise<void>
@@ -82,6 +89,8 @@ export async function montarPainel(
   )
   const store = createCronoStore({ storage, legacyStorage: null })
   const players = createFakeChannelFactory()
+  const locais = createFakeLocalChannelFactory()
+  const cofre = createMemoryBlobVault()
   const clock = createFakeScheduler()
 
   if (options.falharProximas) {
@@ -97,6 +106,10 @@ export async function montarPainel(
       engineOptions={{
         scheduler: clock,
         createChannel: players.create,
+        createLocalChannel: locais.create,
+        blobs: cofre.vault,
+        resolveBlobUrl: cofre.resolveUrl,
+        revokeBlobUrl: cofre.revokeUrl,
         pollMs: options.pollMs ?? 250,
       }}
     />
@@ -119,6 +132,8 @@ export async function montarPainel(
     ...view,
     store,
     players,
+    locais,
+    cofre,
     clock,
     flush,
     async advance(ms: number) {

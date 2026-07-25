@@ -1,4 +1,4 @@
-import { Check, Music2, Radio, Trash2 } from 'lucide-react'
+import { Check, FileMusic, Music2, Radio, Trash2 } from 'lucide-react'
 import { Search } from 'lucide-react'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
@@ -115,13 +115,20 @@ export function BackgroundsTab() {
                 onClick={() => engine.selectBackground(track.id)}
                 aria-pressed={track.id === selectedBackgroundId}
               >
-                <Radio size={16} />
+                {track.kind === 'local' ? (
+                  <FileMusic size={16} />
+                ) : (
+                  <Radio size={16} />
+                )}
                 <span>
                   <b>{track.title}</b>
+                  {/* A linha de baixo diz **de onde vem** a faixa. Para um
+                      arquivo do PC não há canal a creditar, e dizer "YouTube"
+                      ali seria a tela mentindo sobre o que vai tocar. */}
                   <small>
-                    {(track.kind === 'youtube'
-                      ? track.channelTitle
-                      : undefined) ?? 'YouTube'}{' '}
+                    {track.kind === 'local'
+                      ? 'Arquivo local'
+                      : (track.channelTitle ?? 'YouTube')}{' '}
                     · {formatDuration(track.durationSec)}
                   </small>
                 </span>
@@ -144,8 +151,8 @@ export function BackgroundsTab() {
           <div className="empty-state">
             <span>
               <Music2 size={17} />
-              Biblioteca vazia. Busque acima ou cole um link abaixo para
-              adicionar o primeiro fundo musical.
+              Biblioteca vazia. Busque acima, cole um link ou importe um arquivo
+              do PC para adicionar o primeiro fundo musical.
             </span>
           </div>
         )}

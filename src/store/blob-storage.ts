@@ -68,3 +68,27 @@ export async function listBlobIds(): Promise<string[]> {
   const keys = await db.getAllKeys(BLOB_STORE_NAME)
   return keys.map(String)
 }
+
+/**
+ * As quatro operações acima vistas como **uma dependência só**.
+ *
+ * Existe para o motor poder receber o cofre por injeção, do mesmo jeito que já
+ * recebe o relógio e a fábrica de players: nos testes entra um cofre de memória
+ * e nenhum teste de costura precisa de IndexedDB. Sem isto, o único caminho
+ * seria interceptar o módulo — que é o tipo de dublê que passa a mentir assim
+ * que a implementação muda de forma.
+ */
+export interface BlobVault {
+  put(id: string, blob: Blob): Promise<void>
+  get(id: string): Promise<Blob | null>
+  delete(id: string): Promise<void>
+  list(): Promise<string[]>
+}
+
+/** O cofre de verdade — o IndexedDB deste arquivo. */
+export const blobVault: BlobVault = {
+  put: putBlob,
+  get: getBlob,
+  delete: deleteBlob,
+  list: listBlobIds,
+}
