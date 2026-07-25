@@ -116,10 +116,15 @@ describe('um culto do começo ao fim', () => {
     // Fundo tocando e alguém no ar.
     let ana = ''
     await painel.fora(() => {
-      painel.store.getState().addBackground({ videoId: 'bg-1', title: 'Pads' })
-      ana = painel.store
+      painel.store
         .getState()
-        .addToQueue({ name: 'Ana', videoId: 'v-ana', title: 'Ana canta' })
+        .addBackground({ kind: 'youtube', videoId: 'bg-1', title: 'Pads' })
+      ana = painel.store.getState().addToQueue({
+        kind: 'youtube',
+        name: 'Ana',
+        videoId: 'v-ana',
+        title: 'Ana canta',
+      })
     })
     await u.click(screen.getByRole('button', { name: 'Tocar Ana' }))
     await painel.advance(FADE_MS)

@@ -88,12 +88,20 @@ export function QueueCard({
           <div className="queue-name-row">
             <b>{item.name}</b>
             {active && <em>NO AR</em>}
-            {item.embedBlocked && (
+            {item.kind === 'youtube' && item.embedBlocked && (
               <em
                 className="blocked"
                 title="Este vídeo não toca fora do YouTube"
               >
                 BLOQUEADO
+              </em>
+            )}
+            {/* Um arquivo do PC não tem embed para bloquear nem rede para
+                cair: o selo existe para o operador saber, de relance, quais
+                itens do culto continuam de pé se a internet sumir (RF-11). */}
+            {item.kind === 'local' && (
+              <em className="file" title="Áudio importado do computador">
+                ARQUIVO
               </em>
             )}
           </div>

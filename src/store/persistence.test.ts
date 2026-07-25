@@ -1,6 +1,7 @@
 import type { StateStorage } from 'zustand/middleware'
 import { PERSIST_KEY, STATE_VERSION, createCronoStore } from './index'
 import { DB_NAME, createIdbStorage, resetIdbConnection } from './idb-storage'
+import { deleteBlob, getBlob, listBlobIds, putBlob } from './blob-storage'
 import { LEGACY_IMPORTED_KEY, LEGACY_STORAGE_KEY } from './legacy'
 import {
   createFakeLocalStorage,
@@ -77,11 +78,14 @@ describe('IndexedDB (RF-09.1)', () => {
     await primeiro.persist.rehydrate()
 
     primeiro.getState().addToQueue({
+      kind: 'youtube',
       name: 'Ana',
       videoId: 'v1',
       title: 'Ana canta',
     })
-    primeiro.getState().addBackground({ videoId: 'bg1', title: 'Piano' })
+    primeiro
+      .getState()
+      .addBackground({ kind: 'youtube', videoId: 'bg1', title: 'Piano' })
     primeiro.getState().setAccent('#4f8df7')
     await esperarGravacao(storage, (raw) => raw.includes('Ana'))
 
@@ -105,9 +109,12 @@ describe('o que NÃO se persiste', () => {
     const primeiro = createCronoStore({ storage, legacyStorage: null })
     await primeiro.persist.rehydrate()
 
-    const ana = primeiro
-      .getState()
-      .addToQueue({ name: 'Ana', videoId: 'v1', title: 'Ana canta' })
+    const ana = primeiro.getState().addToQueue({
+      kind: 'youtube',
+      name: 'Ana',
+      videoId: 'v1',
+      title: 'Ana canta',
+    })
     primeiro.getState().play(ana)
     expect(primeiro.getState().mode).toBe('main')
     await esperarGravacao(storage, (raw) => raw.includes('Ana'))
@@ -127,9 +134,12 @@ describe('o que NÃO se persiste', () => {
     const store = createCronoStore({ storage, legacyStorage: null })
     await store.persist.rehydrate()
 
-    const ana = store
-      .getState()
-      .addToQueue({ name: 'Ana', videoId: 'v1', title: 'Ana canta' })
+    const ana = store.getState().addToQueue({
+      kind: 'youtube',
+      name: 'Ana',
+      videoId: 'v1',
+      title: 'Ana canta',
+    })
     store.getState().play(ana)
     await esperarGravacao(storage, (raw) => raw.includes('Ana'))
 
@@ -282,9 +292,12 @@ describe('resgate dos dados do protótipo (RF-09.3)', () => {
 
     const primeiro = createCronoStore({ storage, legacyStorage: null })
     await primeiro.persist.rehydrate()
-    primeiro
-      .getState()
-      .addToQueue({ name: 'Carla', videoId: 'v9', title: 'Carla canta' })
+    primeiro.getState().addToQueue({
+      kind: 'youtube',
+      name: 'Carla',
+      videoId: 'v9',
+      title: 'Carla canta',
+    })
     await esperarGravacao(storage, (raw) => raw.includes('Carla'))
 
     const segundo = createCronoStore({ storage, legacyStorage })
@@ -316,5 +329,65 @@ describe('resgate dos dados do protótipo (RF-09.3)', () => {
     await store.persist.rehydrate()
 
     expect(store.getState().queue).toEqual([])
+  })
+})
+
+/**
+ * Os bytes dos áudios locais (RF-11), no store `audio-blobs` do mesmo banco.
+ *
+ * Moram aqui, e não num arquivo próprio, de propósito: é a mesma camada de
+ * IndexedDB destes testes, e reusam o `apagarBanco` dos hooks acima. Um arquivo
+ * de teste **a mais** ainda reacende a corrida C1 do jest-dom sob `isolate:
+ * false` (o registro dos matchers perde a corrida em alguns workers, conforme o
+ * escalonamento) — mantê-los aqui evita essa fragilidade de infra sem mascará-la
+ * como se fosse falha destes testes.
+ */
+describe('blob-storage: bytes dos áudios locais (RF-11)', () => {
+  const fakeAudio = (texto = 'bytes de áudio'): Blob =>
+    new Blob([texto], { type: 'audio/mpeg' })
+
+  it('grava e lê os bytes de volta, com o tipo', async () => {
+    await putBlob('a1', fakeAudio('louvor'))
+
+    const lido = await getBlob('a1')
+    expect(lido).not.toBeNull()
+    expect(await lido?.text()).toBe('louvor')
+    expect(lido?.type).toBe('audio/mpeg')
+  })
+
+  it('devolve null para um id que não existe', async () => {
+    expect(await getBlob('nao-existe')).toBeNull()
+  })
+
+  it('apaga os bytes', async () => {
+    await putBlob('a1', fakeAudio())
+
+    await deleteBlob('a1')
+
+    expect(await getBlob('a1')).toBeNull()
+  })
+
+  it('substitui os bytes ao gravar o mesmo id de novo', async () => {
+    await putBlob('a1', fakeAudio('primeiro'))
+    await putBlob('a1', fakeAudio('segundo'))
+
+    expect(await getBlob('a1').then((b) => b?.text())).toBe('segundo')
+  })
+
+  it('lista os ids guardados', async () => {
+    await putBlob('a1', fakeAudio())
+    await putBlob('a2', fakeAudio())
+
+    expect((await listBlobIds()).sort()).toEqual(['a1', 'a2'])
+  })
+
+  it('os bytes sobrevivem a fechar e reabrir o banco', async () => {
+    await putBlob('a1', fakeAudio('coletânea'))
+
+    // Fecha a conexão: a próxima leitura abre uma nova, como faria o app ao
+    // reiniciar no meio do culto.
+    await resetIdbConnection()
+
+    expect(await getBlob('a1').then((b) => b?.text())).toBe('coletânea')
   })
 })

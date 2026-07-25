@@ -1,4 +1,5 @@
 import {
+  formatBytes,
   formatDuration,
   formatSeconds,
   formatTime,
@@ -81,5 +82,28 @@ describe('a borda entre ms e segundos (RF-04.12)', () => {
   it('escreve com vírgula, como em português', () => {
     expect(formatSeconds(2.5)).toBe('2,5s')
     expect(formatSeconds(0)).toBe('0,0s')
+  })
+})
+
+describe('o medidor de armazenamento (RF-11)', () => {
+  it('sobe de unidade sozinho', () => {
+    expect(formatBytes(512)).toBe('512 B')
+    expect(formatBytes(1024)).toBe('1 KB')
+    expect(formatBytes(5 * 1024 * 1024)).toBe('5,0 MB')
+    expect(formatBytes(1024 * 1024 * 1024)).toBe('1,0 GB')
+  })
+
+  it('a casa decimal só aparece onde ela informa', () => {
+    // Abaixo de 10 a fração diz alguma coisa; acima, vira ruído para quem só
+    // quer saber se ainda cabe o louvor de domingo.
+    expect(formatBytes(1.4 * 1024 * 1024 * 1024)).toBe('1,4 GB')
+    expect(formatBytes(70 * 1024 * 1024)).toBe('70 MB')
+    expect(formatBytes(1462 * 1024 * 1024)).toBe('1,4 GB')
+  })
+
+  it('nada guardado não vira NaN nem número negativo', () => {
+    expect(formatBytes(0)).toBe('0 MB')
+    expect(formatBytes(-1)).toBe('0 MB')
+    expect(formatBytes(Number.NaN)).toBe('0 MB')
   })
 })

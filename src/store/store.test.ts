@@ -20,17 +20,22 @@ beforeEach(() => {
 
 /** Atalho: adiciona alguém à fila e devolve o id. */
 function enfileirar(name: string, videoId = 'abc123'): string {
-  return store.getState().addToQueue({ name, videoId, title: `${name} canta` })
+  return store
+    .getState()
+    .addToQueue({ kind: 'youtube', name, videoId, title: `${name} canta` })
 }
 
 function adicionarFundo(title = 'Piano worship'): string {
-  return store.getState().addBackground({ videoId: `bg-${title}`, title })
+  return store
+    .getState()
+    .addBackground({ kind: 'youtube', videoId: `bg-${title}`, title })
 }
 
 describe('fila (RF-01)', () => {
   it('adiciona ao fim e usa "Convidado" quando o nome vem vazio', () => {
     enfileirar('Ana')
     const id = store.getState().addToQueue({
+      kind: 'youtube',
       name: '   ',
       videoId: 'xyz',
       title: 'Música',
@@ -124,6 +129,41 @@ describe('fila (RF-01)', () => {
     store.getState().playNext()
 
     expect(store.getState().currentId).toBe(bruno)
+  })
+})
+
+describe('áudio local na fila e nos fundos (RF-11)', () => {
+  it('cria um item de fila a partir de um arquivo importado', () => {
+    const id = store.getState().addToQueue({
+      kind: 'local',
+      name: 'Ana',
+      title: 'louvor.mp3',
+      blobId: 'blob-1',
+      fileName: 'louvor.mp3',
+    })
+
+    expect(store.getState().findQueueItem(id)).toMatchObject({
+      kind: 'local',
+      blobId: 'blob-1',
+      fileName: 'louvor.mp3',
+    })
+  })
+
+  it('cria uma faixa de fundo a partir de um arquivo importado', () => {
+    const id = store.getState().addBackground({
+      kind: 'local',
+      title: 'coletânea.mp3',
+      blobId: 'blob-2',
+      fileName: 'coletânea.mp3',
+    })
+
+    expect(store.getState().backgrounds.find((b) => b.id === id)).toMatchObject(
+      {
+        kind: 'local',
+        blobId: 'blob-2',
+        fileName: 'coletânea.mp3',
+      },
+    )
   })
 })
 

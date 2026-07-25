@@ -1,6 +1,6 @@
-import { Plus } from 'lucide-react'
-import { useState } from 'react'
-import type { FormEvent } from 'react'
+import { FolderOpen, Plus } from 'lucide-react'
+import { useRef, useState } from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
 import { parseVideoId } from '../../youtube/video-id'
 import { useEngine } from '../mixer/context'
 
@@ -19,12 +19,17 @@ import { useEngine } from '../mixer/context'
  *
  * O nome é do operador porque não temos de onde tirar o título do vídeo: isso
  * chega na Etapa 5, com o oEmbed (RF-01.2).
+ *
+ * Aqui mora também a terceira porta: o **arquivo do PC** (RF-11.2). É a mesma
+ * ideia da coletânea favorita levada ao limite — a trilha que a igreja já tem
+ * em MP3 não precisa existir no YouTube para servir de fundo.
  */
 export function AddBackgroundForm() {
   const engine = useEngine()
   const [title, setTitle] = useState('')
   const [url, setUrl] = useState('')
   const [erro, setErro] = useState('')
+  const arquivoRef = useRef<HTMLInputElement>(null)
 
   const submit = (event: FormEvent): void => {
     event.preventDefault()
@@ -36,9 +41,28 @@ export function AddBackgroundForm() {
       return
     }
 
-    engine.addBackground({ videoId, title: title.trim() || 'Fundo musical' })
+    engine.addBackground({
+      kind: 'youtube',
+      videoId,
+      title: title.trim() || 'Fundo musical',
+    })
     setTitle('')
     setUrl('')
+    setErro('')
+  }
+
+  /**
+   * Os arquivos escolhidos viram faixas da biblioteca (RF-11.2).
+   *
+   * Passa pelo motor, e não pelo store, porque a primeira faixa de uma
+   * biblioteca vazia já entra tocando (RF-03.4) — e isso é som, não só dado.
+   */
+  const escolherArquivos = (event: ChangeEvent<HTMLInputElement>): void => {
+    const arquivos = Array.from(event.target.files ?? [])
+    // Zera para que escolher o mesmo arquivo de novo volte a disparar o evento.
+    event.target.value = ''
+    if (arquivos.length === 0) return
+    void engine.importBackgroundFiles(arquivos)
     setErro('')
   }
 
@@ -74,6 +98,31 @@ export function AddBackgroundForm() {
           {erro}
         </p>
       )}
+
+      <div className="import-row">
+        <button
+          className="pill-outline"
+          type="button"
+          onClick={() => arquivoRef.current?.click()}
+          aria-describedby="import-fundo-dica"
+        >
+          <FolderOpen size={14} />
+          Importar do PC
+        </button>
+        <input
+          ref={arquivoRef}
+          type="file"
+          accept="audio/*"
+          multiple
+          hidden
+          aria-hidden="true"
+          tabIndex={-1}
+          onChange={escolherArquivos}
+        />
+        <small id="import-fundo-dica">
+          A coletânea que a igreja já tem em arquivo, sem depender da internet.
+        </small>
+      </div>
     </>
   )
 }

@@ -23,8 +23,12 @@ import type { StoreState } from './types-store'
  * na caixa.
  */
 
-/** Versão do schema. O protótipo parou na 4; a reescrita começa na 5. */
-export const STATE_VERSION = 5
+/**
+ * Versão do schema. O protótipo parou na 4; a reescrita começou na 5; a 6 traz
+ * a origem de mídia por `kind` (áudio local, RF-11). A migração é por
+ * normalização — item ≤ v5 sem `kind` mas com `videoId` vira `kind:'youtube'`.
+ */
+export const STATE_VERSION = 6
 
 /** A chave do registro no IndexedDB. */
 export const PERSIST_KEY = 'cronoapp-state'

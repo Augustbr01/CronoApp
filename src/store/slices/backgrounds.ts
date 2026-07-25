@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import { createId } from '../ids'
-import type { Background } from '../types'
+import type { Background, BackgroundMediaSource } from '../types'
 import type { StoreState } from '../types-store'
 
 /**
@@ -16,7 +16,17 @@ import type { StoreState } from '../types-store'
  *   avançar para um vizinho que não existe.
  */
 
-export type NewBackground = Omit<Background, 'id' | 'addedAt'>
+/**
+ * O que se informa ao guardar uma faixa; o resto o store preenche.
+ *
+ * Composto a partir de `BackgroundMediaSource` (e não `Omit<Background, …>`)
+ * pelo mesmo motivo do `NewQueueItem`: `Omit` sobre uma union discriminada
+ * perderia o `videoId`/`blobId` de cada variante.
+ */
+export type NewBackground = {
+  title: string
+  durationSec?: number
+} & BackgroundMediaSource
 
 export interface BackgroundSlice {
   backgrounds: Background[]

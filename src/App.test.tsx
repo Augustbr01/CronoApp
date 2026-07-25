@@ -79,7 +79,9 @@ describe('adicionar à fila (RF-01.1)', () => {
 
     expect(screen.getByText('Ana')).toBeInTheDocument()
     expect(screen.getByText('1 na fila')).toBeInTheDocument()
-    expect(painel.store.getState().queue[0]?.videoId).toBe('dQw4w9WgXcQ')
+    expect(painel.store.getState().queue[0]).toMatchObject({
+      videoId: 'dQw4w9WgXcQ',
+    })
   })
 
   it('recusa o que não é link de vídeo, com a frase na tela', async () => {
@@ -396,6 +398,177 @@ describe('cadastrar fundo colando o link (sem depender da busca)', () => {
     await painel.advance(FADE_MS * 2)
 
     expect(painel.players.background().videos.at(-1)).toBe('9bZkp7q19f0')
+  })
+})
+
+describe('importar áudio do PC (RF-11)', () => {
+  /**
+   * O `<input type="file">` que o botão "Importar do PC" aciona.
+   *
+   * É procurado pelo seletor, e não por rótulo, porque ele é deliberadamente
+   * escondido do teclado e do leitor de tela: quem tem nome e foco é o botão.
+   * Só uma aba fica montada por vez, então o seletor não ambigua.
+   */
+  function seletorDeArquivo(): HTMLInputElement {
+    const input =
+      painel.container.querySelector<HTMLInputElement>('input[type="file"]')
+    if (!input) throw new Error('nenhum seletor de arquivo na aba')
+    return input
+  }
+
+  function arquivo(nome: string): File {
+    return new File(['bytes-de-som'], nome, { type: 'audio/mpeg' })
+  }
+
+  /** Escolhe arquivos como o seletor do sistema faria, e espera a gravação. */
+  async function importar(...nomes: string[]): Promise<void> {
+    await user().upload(seletorDeArquivo(), nomes.map(arquivo))
+    await painel.flush()
+    await painel.flush()
+  }
+
+  it('o arquivo entra na fila com o nome do arquivo e o selo ARQUIVO', async () => {
+    await user().type(screen.getByLabelText('Nome da pessoa'), 'Ana')
+    await importar('Grandes Coisas.mp3')
+
+    expect(screen.getByText('Ana')).toBeInTheDocument()
+    expect(screen.getByText('Grandes Coisas.mp3')).toBeInTheDocument()
+    // O selo diz o que o item é; um arquivo do PC nunca é "BLOQUEADO", porque
+    // não há embed que possa recusá-lo.
+    expect(screen.getByText('ARQUIVO')).toBeInTheDocument()
+    expect(screen.queryByText('BLOQUEADO')).not.toBeInTheDocument()
+  })
+
+  it('tocar o arquivo mostra a faixa na pré-escuta, no lugar do vídeo', async () => {
+    await importar('Grandes Coisas.mp3')
+    // Sem nome digitado, quem vai cantar é "Convidado" (RF-02.3).
+    await user().click(screen.getByRole('button', { name: 'Tocar Convidado' }))
+    await painel.flush()
+    await painel.advance(FADE_MS)
+
+    // O iframe segue montado (é o mesmo do culto inteiro), mas sai da frente:
+    // ele estaria exibindo, congelado, o último vídeo que tocou.
+    expect(painel.container.querySelector('.preview.has-video')).toBeNull()
+    const preescuta = painel.container.querySelector(
+      '.preview-file',
+    ) as HTMLElement
+    expect(
+      within(preescuta).getByText('Grandes Coisas.mp3'),
+    ).toBeInTheDocument()
+    expect(within(preescuta).getByText('Arquivo local')).toBeInTheDocument()
+
+    // E o som sai mesmo — pelo backend local, no volume do master.
+    expect(painel.locais.main().loads).toHaveLength(1)
+    expect(painel.locais.main().volume).toBeCloseTo(0.8, 2)
+  })
+
+  it('o retângulo não devolve o iframe no meio da saída do arquivo', async () => {
+    await importar('Grandes Coisas.mp3')
+    await user().click(screen.getByRole('button', { name: 'Tocar Convidado' }))
+    await painel.flush()
+    await painel.advance(FADE_MS)
+
+    // Remover tira o item da fila **na hora**, mas a rampa segue por mais dois
+    // segundos. Se a tela seguisse o item, o iframe voltaria à frente aqui,
+    // exibindo congelado o último vídeo do YouTube enquanto o MP3 desce.
+    await user().click(
+      screen.getByRole('button', { name: 'Remover Convidado' }),
+    )
+    await painel.advance(FADE_MS / 2)
+
+    expect(painel.container.querySelector('.preview.has-video')).toBeNull()
+    expect(painel.container.querySelector('.preview-file')).not.toBeNull()
+  })
+
+  it('o fundo importado entra como "Arquivo local" e já toca (RF-03.4)', async () => {
+    await user().keyboard('3')
+    await importar('pads-de-oracao.mp3')
+    await painel.advance(FADE_MS)
+
+    const biblioteca = painel.container.querySelector(
+      '.background-list',
+    ) as HTMLElement
+    expect(
+      within(biblioteca).getByText('pads-de-oracao.mp3'),
+    ).toBeInTheDocument()
+    // Creditar "YouTube" numa faixa que veio do disco seria a tela mentindo.
+    expect(within(biblioteca).getByText(/Arquivo local/)).toBeInTheDocument()
+    expect(noAr()).toContain('FUNDO')
+    expect(painel.locais.background().volume).toBeCloseTo(0.4, 2)
+  })
+
+  it('sem espaço no dispositivo, o operador vê o motivo (RNF-03.3)', async () => {
+    painel.cofre.falharProximaGravacao(
+      new DOMException('quota', 'QuotaExceededError'),
+    )
+
+    await importar('louvor.mp3')
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/Não há espaço/)
+    expect(painel.store.getState().queue).toHaveLength(0)
+  })
+
+  it('remover o item leva os bytes junto (RF-11.5)', async () => {
+    await importar('louvor.mp3')
+    expect(painel.cofre.guardados.size).toBe(1)
+
+    await user().click(
+      screen.getByRole('button', { name: 'Remover Convidado' }),
+    )
+    await painel.flush()
+
+    expect(painel.cofre.guardados.size).toBe(0)
+  })
+})
+
+describe('o medidor de armazenamento nas configurações (RF-11)', () => {
+  /**
+   * O jsdom não implementa `navigator.storage`, então o dublê é o próprio
+   * cenário do teste: com a API, o campo aparece; sem ela, não aparece — que é
+   * exatamente o que o componente promete.
+   */
+  function comEstimativa(estimate: StorageEstimate | null): void {
+    if (!estimate) {
+      Reflect.deleteProperty(navigator, 'storage')
+      return
+    }
+    Object.defineProperty(navigator, 'storage', {
+      value: { estimate: () => Promise.resolve(estimate) },
+      configurable: true,
+    })
+  }
+
+  // O jsdom é **compartilhado** por todo o worker (`isolate: false`), então
+  // mexer no `navigator` sem devolver como estava vaza para os outros arquivos
+  // de teste — e vira um flake que ninguém liga a este bloco.
+  let original: PropertyDescriptor | undefined
+
+  beforeEach(() => {
+    original = Object.getOwnPropertyDescriptor(navigator, 'storage')
+  })
+
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'storage')
+    if (original) Object.defineProperty(navigator, 'storage', original)
+  })
+
+  it('mostra quanto o app ocupa e quanto o navegador reserva', async () => {
+    comEstimativa({ usage: 70 * 1024 * 1024, quota: 2 * 1024 * 1024 * 1024 })
+
+    await user().click(screen.getByRole('button', { name: 'Configurações' }))
+    await painel.flush()
+
+    expect(screen.getByText('70 MB')).toBeInTheDocument()
+    expect(screen.getByText(/reserva até 2,0 GB/)).toBeInTheDocument()
+  })
+
+  it('sem a API do navegador, não inventa número nenhum', async () => {
+    comEstimativa(null)
+
+    await user().click(screen.getByRole('button', { name: 'Configurações' }))
+    await painel.flush()
+
+    expect(screen.queryByText(/Espaço usado no dispositivo/)).toBeNull()
   })
 })
 

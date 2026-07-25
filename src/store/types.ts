@@ -29,24 +29,53 @@ export type AccentColor = (typeof ACCENT_COLORS)[number]
 
 export type ThemeName = 'dark' | 'light'
 
+/** O discriminante da origem de mídia — YouTube ou arquivo do PC (RF-11). */
+export type MediaKind = 'youtube' | 'local'
+
+/**
+ * A origem de um áudio importado do PC (RF-11) — a mesma para a fila e os fundos.
+ *
+ * O estado guarda só a **referência**: o `blobId`, que endereça os bytes no
+ * store `audio-blobs` do IndexedDB (fora do JSON do `persist` — ver
+ * [blob-storage.ts](./blob-storage.ts)), e o `fileName`, que vira o título e o
+ * subtítulo do card. Os megabytes de binário nunca entram no estado persistido.
+ */
+export interface LocalMedia {
+  kind: 'local'
+  blobId: string
+  fileName: string
+}
+
+/**
+ * De onde vem a mídia de um item da fila — o `kind` discrimina (RF-11).
+ *
+ * `videoId` e o que o oEmbed descobre (`thumbnailUrl`, `embedBlocked`) existem
+ * **só** na variante do YouTube; um arquivo local não tem vídeo nem embed.
+ */
+export type QueueMediaSource =
+  | {
+      kind: 'youtube'
+      videoId: string
+      thumbnailUrl?: string
+      /**
+       * O dono do vídeo bloqueou reprodução fora do YouTube, detectado na hora
+       * de adicionar (RF-01.3). Serve para avisar **antes** do culto.
+       */
+      embedBlocked?: boolean
+    }
+  | LocalMedia
+
 /** Um participante na fila — alguém que vai cantar (RF-01). */
-export interface QueueItem {
+export type QueueItem = {
   id: string
   /** Nome de quem vai cantar. Vazio vira "Convidado" na borda (RF-02.3). */
   name: string
-  videoId: string
-  /** Título do vídeo, vindo do oEmbed ou da busca (RF-01.2). */
+  /** Título do vídeo (oEmbed/busca) ou nome do arquivo local (RF-01.2). */
   title: string
   /** Duração em segundos, quando conhecida. */
   durationSec?: number
-  thumbnailUrl?: string
-  /**
-   * O dono do vídeo bloqueou reprodução fora do YouTube, detectado na hora de
-   * adicionar (RF-01.3). Serve para avisar **antes** do culto.
-   */
-  embedBlocked?: boolean
   addedAt: number
-}
+} & QueueMediaSource
 
 /** Uma música que já foi cantada (RF-06.1). */
 export interface HistoryEntry {
@@ -60,16 +89,27 @@ export interface HistoryEntry {
   sessionId: string
 }
 
+/**
+ * De onde vem uma faixa de fundo — o `kind` discrimina (RF-11).
+ *
+ * `videoId` e `channelTitle` existem **só** na variante do YouTube.
+ */
+export type BackgroundMediaSource =
+  | {
+      kind: 'youtube'
+      videoId: string
+      channelTitle?: string
+      thumbnailUrl?: string
+    }
+  | LocalMedia
+
 /** Uma faixa da biblioteca de fundos (RF-03). */
-export interface Background {
+export type Background = {
   id: string
-  videoId: string
   title: string
-  channelTitle?: string
-  thumbnailUrl?: string
   durationSec?: number
   addedAt: number
-}
+} & BackgroundMediaSource
 
 /** Preferências do operador, todas persistidas (RF-08.3). */
 export interface Preferences {

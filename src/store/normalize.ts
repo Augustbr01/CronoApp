@@ -57,38 +57,89 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : []
 }
 
-/** Um item de fila só sobrevive se tiver vídeo — sem isso não há o que tocar. */
+/**
+ * Um item de fila só sobrevive se tiver o que tocar (RF-11).
+ *
+ * A migração é por normalização, como todo o resto: um item **sem** `kind` mas
+ * com `videoId` (o formato de todas as versões ≤ 5) vira `kind:'youtube'`; um
+ * item local só passa se trouxer `blobId` **e** `fileName` — sem os dois não há
+ * como remontar o áudio. Se o blob referenciado existe de fato no IndexedDB não
+ * se checa aqui (isto é síncrono): fica para o load (que erra) e a varredura de
+ * órfãos da Etapa 5.
+ */
 function normalizeQueueItem(value: unknown): QueueItem | null {
   if (!isRecord(value)) return null
+
+  const id = asString(value.id) || createId('q')
+  const name = asString(value.name).trim() || 'Convidado'
+  const durationSec = asOptionalNumber(value.durationSec)
+  const addedAt = asNumber(value.addedAt, Date.now())
+
+  if (value.kind === 'local') {
+    const blobId = asString(value.blobId)
+    const fileName = asString(value.fileName)
+    if (!blobId || !fileName) return null
+    return {
+      id,
+      name,
+      title: asString(value.title) || fileName,
+      durationSec,
+      addedAt,
+      kind: 'local',
+      blobId,
+      fileName,
+    }
+  }
+
   const videoId = asString(value.videoId)
   if (!videoId) return null
-
   return {
-    id: asString(value.id) || createId('q'),
-    name: asString(value.name).trim() || 'Convidado',
-    videoId,
+    id,
+    name,
     title: asString(value.title) || 'Vídeo do YouTube',
-    durationSec: asOptionalNumber(value.durationSec),
+    durationSec,
+    addedAt,
+    kind: 'youtube',
+    videoId,
     thumbnailUrl: asOptionalString(value.thumbnailUrl),
     embedBlocked:
       typeof value.embedBlocked === 'boolean' ? value.embedBlocked : undefined,
-    addedAt: asNumber(value.addedAt, Date.now()),
   }
 }
 
 function normalizeBackground(value: unknown): Background | null {
   if (!isRecord(value)) return null
+
+  const id = asString(value.id) || createId('bg')
+  const durationSec = asOptionalNumber(value.durationSec)
+  const addedAt = asNumber(value.addedAt, Date.now())
+
+  if (value.kind === 'local') {
+    const blobId = asString(value.blobId)
+    const fileName = asString(value.fileName)
+    if (!blobId || !fileName) return null
+    return {
+      id,
+      title: asString(value.title) || fileName,
+      durationSec,
+      addedAt,
+      kind: 'local',
+      blobId,
+      fileName,
+    }
+  }
+
   const videoId = asString(value.videoId)
   if (!videoId) return null
-
   return {
-    id: asString(value.id) || createId('bg'),
-    videoId,
+    id,
     title: asString(value.title) || 'Fundo musical',
+    durationSec,
+    addedAt,
+    kind: 'youtube',
+    videoId,
     channelTitle: asOptionalString(value.channelTitle),
     thumbnailUrl: asOptionalString(value.thumbnailUrl),
-    durationSec: asOptionalNumber(value.durationSec),
-    addedAt: asNumber(value.addedAt, Date.now()),
   }
 }
 

@@ -7,8 +7,8 @@ import type { StateStorage } from 'zustand/middleware'
  *
  * O `persist` do Zustand fala em texto — `getItem`/`setItem`/`removeItem`, a
  * mesma cara do localStorage. Este arquivo entrega essa interface guardando os
- * dados no IndexedDB, que é o que comporta histórico longo (RF-06.2) e, no
- * futuro, MP3 de fundo.
+ * dados no IndexedDB, que é o que comporta histórico longo (RF-06.2) e os bytes
+ * dos áudios locais (RF-11), guardados à parte em `blob-storage.ts`.
  *
  * O IndexedDB é assíncrono, e o `persist` sabe lidar com isso — a hidratação do
  * store acontece um instante depois do primeiro render. Quem depende de estado
@@ -16,16 +16,33 @@ import type { StateStorage } from 'zustand/middleware'
  */
 
 export const DB_NAME = 'cronoapp'
-export const DB_VERSION = 1
+/**
+ * Versão 2: acrescentou o store `audio-blobs` para os bytes dos áudios locais
+ * (RF-11). O store `state` do JSON do `persist` não mudou — os dois convivem no
+ * mesmo banco, atualizados pelo mesmo `upgrade`.
+ */
+export const DB_VERSION = 2
 export const STORE_NAME = 'state'
+/** Onde vivem os bytes dos áudios importados do PC (RF-11) — fora do JSON. */
+export const BLOB_STORE_NAME = 'audio-blobs'
 
 let dbPromise: Promise<IDBPDatabase> | null = null
 
-function getDb(): Promise<IDBPDatabase> {
+/**
+ * A conexão única com o banco, compartilhada por quem guarda estado
+ * (`createIdbStorage`) e por quem guarda blobs (`blob-storage.ts`). Um banco só,
+ * uma conexão só: abrir uma segunda entraria em disputa de versão com a primeira.
+ */
+export function getDb(): Promise<IDBPDatabase> {
   dbPromise ??= openDB(DB_NAME, DB_VERSION, {
     upgrade(db) {
+      // Idempotente: cria o que faltar. Um banco v1 já tem `state` e ganha só o
+      // `audio-blobs`; um banco novo ganha os dois.
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME)
+      }
+      if (!db.objectStoreNames.contains(BLOB_STORE_NAME)) {
+        db.createObjectStore(BLOB_STORE_NAME)
       }
     },
   })

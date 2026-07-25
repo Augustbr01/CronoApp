@@ -62,6 +62,59 @@ describe('itens da fila', () => {
   })
 })
 
+describe('origem de mídia — a union kind (RF-11)', () => {
+  it('item sem kind mas com vídeo vira youtube (migração v5→v6)', () => {
+    // O formato de toda versão ≤ 5 não tinha `kind`; a migração é por
+    // normalização, sem escada versão a versão.
+    const estado = normalizePersistedState({
+      queue: [{ videoId: 'v1', name: 'Ana', title: 'Ana canta' }],
+      backgrounds: [{ id: 'bg1', videoId: 'v', title: 'Piano' }],
+    })
+
+    expect(estado.queue[0]).toMatchObject({ kind: 'youtube', videoId: 'v1' })
+    expect(estado.backgrounds[0]).toMatchObject({
+      kind: 'youtube',
+      videoId: 'v',
+    })
+  })
+
+  it('aceita item local que traz blobId e fileName', () => {
+    const estado = normalizePersistedState({
+      queue: [
+        { kind: 'local', blobId: 'a1', fileName: 'louvor.mp3', name: 'Ana' },
+      ],
+      backgrounds: [{ kind: 'local', blobId: 'b1', fileName: 'pads.mp3' }],
+    })
+
+    expect(estado.queue[0]).toMatchObject({
+      kind: 'local',
+      blobId: 'a1',
+      fileName: 'louvor.mp3',
+    })
+    // Sem título gravado, o nome do arquivo assume — o card nunca fica sem rótulo.
+    expect(estado.queue[0]?.title).toBe('louvor.mp3')
+    expect(estado.backgrounds[0]).toMatchObject({
+      kind: 'local',
+      blobId: 'b1',
+      fileName: 'pads.mp3',
+    })
+  })
+
+  it('descarta item local sem blob ou sem nome de arquivo', () => {
+    // Sem os dois não há como remontar o áudio; sobra só o item completo.
+    const estado = normalizePersistedState({
+      queue: [
+        { kind: 'local', fileName: 'sem-blob.mp3', name: 'A' },
+        { kind: 'local', blobId: 'a1', name: 'B' },
+        { kind: 'local', blobId: 'a2', fileName: 'ok.mp3', name: 'C' },
+      ],
+    })
+
+    expect(estado.queue).toHaveLength(1)
+    expect(estado.queue[0]).toMatchObject({ kind: 'local', blobId: 'a2' })
+  })
+})
+
 describe('fundo selecionado', () => {
   it('não deixa apontar para uma faixa que não existe', () => {
     const estado = normalizePersistedState({

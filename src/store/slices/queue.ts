@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import { createId } from '../ids'
-import type { QueueItem } from '../types'
+import type { QueueItem, QueueMediaSource } from '../types'
 import type { StoreState } from '../types-store'
 
 /**
@@ -12,8 +12,19 @@ import type { StoreState } from '../types-store'
  * primeiro que ainda não cantou", que é coisa diferente.
  */
 
-/** O que se informa ao adicionar; o resto o store preenche. */
-export type NewQueueItem = Omit<QueueItem, 'id' | 'addedAt'>
+/**
+ * O que se informa ao adicionar; o resto o store preenche.
+ *
+ * Carrega a mesma union de `QueueItem` (`kind:'youtube'` ou `kind:'local'`) —
+ * daí não ser um `Omit`: `Omit` sobre uma union discriminada colapsa nos campos
+ * comuns e perde `videoId`/`blobId`. Compondo a partir de `QueueMediaSource`,
+ * cada variante mantém os seus.
+ */
+export type NewQueueItem = {
+  name: string
+  title: string
+  durationSec?: number
+} & QueueMediaSource
 
 /** O que o oEmbed descobre sobre um item que já está na fila (RF-01.2). */
 export interface QueueItemInfo {
@@ -127,21 +138,29 @@ export const createQueueSlice: StateCreator<StoreState, [], [], QueueSlice> = (
         // Campo a campo, e só o que veio de verdade: uma resposta parcial não
         // pode apagar o que já se sabia. Título vazio, em especial, deixaria a
         // linha da fila sem rótulo nenhum.
-        const atualizado: QueueItem = { ...item }
         const title = info.title?.trim()
-        if (title) atualizado.title = title
-        if (
+        const durationSec =
           typeof info.durationSec === 'number' &&
           Number.isFinite(info.durationSec) &&
           info.durationSec > 0
-        ) {
-          atualizado.durationSec = info.durationSec
+            ? info.durationSec
+            : item.durationSec
+
+        // `thumbnailUrl`/`embedBlocked` são do oEmbed, que só existe para
+        // YouTube — um item local ignora esses campos (nem os tem no tipo).
+        if (item.kind === 'youtube') {
+          return {
+            ...item,
+            title: title || item.title,
+            durationSec,
+            thumbnailUrl: info.thumbnailUrl ?? item.thumbnailUrl,
+            embedBlocked:
+              info.embedBlocked !== undefined
+                ? info.embedBlocked
+                : item.embedBlocked,
+          }
         }
-        if (info.thumbnailUrl) atualizado.thumbnailUrl = info.thumbnailUrl
-        if (info.embedBlocked !== undefined) {
-          atualizado.embedBlocked = info.embedBlocked
-        }
-        return atualizado
+        return { ...item, title: title || item.title, durationSec }
       }),
     }))
   },
