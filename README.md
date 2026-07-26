@@ -12,9 +12,8 @@ reconstrói a fundação com testes, documentação e uma arquitetura por domín
 
 - **Vite + React 19 + TypeScript estrito** (`strict: true`, zero `any`)
 - **Zustand** para estado de domínio, persistido em **IndexedDB** (via `idb`)
-- **YouTube IFrame Player API** direta (sem `react-player` — corta ~1,4 MB de
-  HLS/DASH nunca usados)
-- CSS artesanal com custom properties (sem framework de utilitários)
+- **YouTube IFrame Player API**
+- CSS artesanal com custom properties
 - **Vitest + Testing Library + Playwright** para testes; **ESLint + Prettier**
 
 ## Requisitos
@@ -67,22 +66,3 @@ src/
 server/        a lógica do backend — cache, limite por IP, cota, Data API
 api/           os pontos de entrada da Vercel, finos, que só apontam pra server/
 ```
-
-## Estado do desenvolvimento
-
-- [x] **Etapa 1 — Fundação**: scaffold, TS estrito, ESLint + Prettier, Vitest +
-      Testing Library + Playwright, CI, estrutura por domínio, documentação.
-- [x] **Etapa 2 — Motor de áudio**: fade de potência constante, crossfade,
-      suavização do fader, wrapper da IFrame API, mixer com laço por quadro.
-- [x] **Etapa 3 — Domínio e persistência**: store por fatias, IndexedDB,
-      migração versionada, resgate do `localStorage` do protótipo, backup JSON.
-- [x] **Etapa 4 — Interface**: painel reconstruído por domínio, atalhos de
-      teclado, Error Boundary global, foco gerenciado no modal.
-- [x] **Etapa 5 — Backend de busca**: endpoint de busca com cache, limite por
-      IP e contador de cota; oEmbed preenchendo título, duração e aviso de embed
-      bloqueado ao colar link.
-- [x] **Etapa 6 — Endurecimento e entrega**: e2e do fluxo crítico no app
-      construído, auditoria de acessibilidade nos dois temas, orçamento de
-      bundle verificado no CI, manifesto PWA e ícones.
-- [ ] Ensaio real: um culto inteiro em paralelo com o método atual, antes de
-      aposentar o protótipo.
