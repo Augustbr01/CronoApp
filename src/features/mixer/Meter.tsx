@@ -36,7 +36,14 @@ export function Meter({ level }: MeterProps) {
     playing ? JITTER_MS : null,
   )
 
-  const lit = Math.round((level / 100) * SEGMENTS * (playing ? jitter : 1))
+  // Um segmento no mínimo enquanto houver som. Com 14 segmentos, o
+  // arredondamento apagaria o medidor inteiro nos volumes de sussurro (1 e 2) —
+  // e como a saída passa pelo amplificador da mesa, esse volume se ouve na
+  // igreja. Medidor apagado com canal soando é a informação errada: o operador
+  // leria "não sai som daqui" e iria procurar o problema no lugar errado.
+  const lit = playing
+    ? Math.max(1, Math.round((level / 100) * SEGMENTS * jitter))
+    : 0
 
   return (
     <div className="meter" aria-hidden="true">

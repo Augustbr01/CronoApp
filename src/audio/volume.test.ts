@@ -1,14 +1,14 @@
 import { SNAP_TO_MUTE_THRESHOLD, composeVolume, snapToMute } from './volume'
 
 describe('snapToMute', () => {
-  it('puxa ao zero qualquer fader abaixo de 3%', () => {
+  it('puxa ao zero só o que o player nem conseguiria tocar', () => {
     expect(snapToMute(0)).toBe(0)
-    expect(snapToMute(1)).toBe(0)
-    expect(snapToMute(2.9)).toBe(0)
+    expect(snapToMute(0.4)).toBe(0)
   })
 
-  it('deixa passar o fader a partir do limite de 3%', () => {
-    expect(snapToMute(SNAP_TO_MUTE_THRESHOLD)).toBe(3)
+  it('deixa passar o sussurro de 1 e 2, que no amplificador se ouve', () => {
+    expect(snapToMute(SNAP_TO_MUTE_THRESHOLD)).toBe(1)
+    expect(snapToMute(2)).toBe(2)
     expect(snapToMute(50)).toBe(50)
     expect(snapToMute(100)).toBe(100)
   })
