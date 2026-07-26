@@ -543,9 +543,21 @@ describe('ajustes em tempo real', () => {
   })
 
   it('o snap-to-mute vale para o número guardado, não só para o som (RF-04.9)', () => {
-    engine.setBackgroundFader(2)
+    engine.setBackgroundFader(0.4)
 
     expect(store.getState().backgroundFader).toBe(0)
+  })
+
+  it('o fundo em 2 soa em 2 — o PA amplifica o sussurro (RF-04.9)', () => {
+    comFundo()
+    clock.advance(FADE_MS)
+
+    engine.setBackgroundFader(2)
+    clock.advance(FADE_MS)
+
+    expect(store.getState().backgroundFader).toBe(2)
+    expect(players.background().volume).toBeCloseTo(0.02, 4)
+    expect(store.getState().mode).toBe('background')
   })
 })
 

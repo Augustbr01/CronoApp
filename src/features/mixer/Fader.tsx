@@ -8,7 +8,8 @@ import { Meter } from './Meter'
  *
  * - **Ponteiro** (RF-05.6): a posição do dedo/cursor contra a altura do trilho
  *   vira o valor.
- * - **Teclado** (RNF-05.2): setas mexem de 5 em 5, com `role="slider"` e
+ * - **Teclado** (RNF-05.2): setas mexem de 5 em 5 — e de 1 em 1 com `Shift`, que
+ *   é a única forma de chegar aos volumes de sussurro — com `role="slider"` e
  *   `aria-valuenow` para leitor de tela.
  * - **O snap-to-mute** (RF-04.9) fica no motor, não aqui: o valor que a tela
  *   mostra é o mesmo que o áudio ouve, sempre.
@@ -33,6 +34,19 @@ import { Meter } from './Meter'
  */
 
 const STEP = 5
+/**
+ * Passo com `Shift`: 1, o menor volume que existe.
+ *
+ * A faixa entre o silêncio e 5 é onde o operador deixa o fundo sob a fala, e o
+ * som sai do navegador para o amplificador da mesa — 1 e 2 se ouvem na igreja.
+ * De 5 em 5 essa faixa não tem como ser alcançada pelo teclado, e no arraste ela
+ * mede pouco mais de um pixel.
+ *
+ * `Shift` não briga com o atalho global de master (`Shift` + setas): o handler
+ * global sai de cena quando o foco está num slider — ver `emUmFader` em
+ * `useKeyboardShortcuts`.
+ */
+const FINE_STEP = 1
 
 interface FaderProps {
   label: string
@@ -129,13 +143,14 @@ export function Fader({ label, value, level, muted, onChange }: FaderProps) {
           onKeyDown={(event) => {
             // Tocou o teclado: a partir daqui o anel de foco volta a valer.
             setFocoDePonteiro(false)
+            const step = event.shiftKey ? FINE_STEP : STEP
             if (event.key === 'ArrowUp' || event.key === 'ArrowRight') {
               event.preventDefault()
-              onChange(Math.min(100, value + STEP))
+              onChange(Math.min(100, value + step))
             }
             if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') {
               event.preventDefault()
-              onChange(Math.max(0, value - STEP))
+              onChange(Math.max(0, value - step))
             }
             if (event.key === 'Home') {
               event.preventDefault()

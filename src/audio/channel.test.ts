@@ -29,12 +29,13 @@ describe('fader e mudo', () => {
   it('aplica o snap-to-mute ao mover o fader (RF-04.9)', () => {
     const channel = createChannel()
 
-    channel.setFader(2.5)
+    channel.setFader(0.5)
     expect(channel.getFader()).toBe(0)
     expect(channel.isMuted()).toBe(true)
 
-    channel.setFader(3)
-    expect(channel.getFader()).toBe(3)
+    // 1 é volume de verdade, não resíduo: o canal segue no ar.
+    channel.setFader(1)
+    expect(channel.getFader()).toBe(1)
     expect(channel.isMuted()).toBe(false)
   })
 

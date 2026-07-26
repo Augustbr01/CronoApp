@@ -745,6 +745,41 @@ describe('foco no fader não duplica o passo da seta', () => {
   })
 })
 
+/**
+ * O volume de sussurro (RF-04.9).
+ *
+ * A saída do navegador vai para o amplificador da mesa, então 1 e 2 são volumes
+ * que a igreja ouve — não resíduo. O snap-to-mute engolia essa faixa inteira: o
+ * operador arrastava para 2 e o fundo desaparecia.
+ */
+describe('a faixa de sussurro do fader', () => {
+  it('Shift + seta anda de 1 em 1 e 1 e 2 sobrevivem', async () => {
+    const u = user()
+    const fundo = screen.getByRole('slider', { name: 'Volume FUNDO' })
+    fundo.focus()
+
+    // De 40 a 5, de 5 em 5, com as setas secas.
+    await u.keyboard('{ArrowDown}'.repeat(7))
+    expect(fundo).toHaveAttribute('aria-valuenow', '5')
+
+    await u.keyboard('{Shift>}{ArrowDown}{ArrowDown}{ArrowDown}{/Shift}')
+
+    expect(fundo).toHaveAttribute('aria-valuenow', '2')
+  })
+
+  it('mas o fim do curso continua sendo zero absoluto', async () => {
+    const u = user()
+    const fundo = screen.getByRole('slider', { name: 'Volume FUNDO' })
+    fundo.focus()
+
+    // O que o amplificador levanta em 1 ele levantaria num resíduo qualquer:
+    // "tudo para baixo" tem que ser silêncio de verdade.
+    await u.keyboard('{Shift>}{ArrowDown}{/Shift}{Home}')
+
+    expect(fundo).toHaveAttribute('aria-valuenow', '0')
+  })
+})
+
 describe('o primeiro arranque (setup do nome da igreja)', () => {
   async function primeiroArranque() {
     painel.unmount()
